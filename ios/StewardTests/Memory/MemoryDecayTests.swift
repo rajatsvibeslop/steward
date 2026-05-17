@@ -115,4 +115,97 @@ final class MemoryDecayTests: XCTestCase {
             XCTAssertEqual(s, 0.0)
         }
     }
+
+    // MARK: - Auto-invocation seam (v1.1 patch)
+
+    /// `MemoryDecayJob.runPersistencePass(on:now:)` is the single internal
+    /// seam invoked by both `BGTaskCoordinator.handleAppRefresh` /
+    /// `handleProcessing` and the one-shot launch kick in `AppBootstrap`.
+    /// This test asserts the seam writes through to the queue end-to-end —
+    /// proving the wiring exercised by the BGTask refresh path actually
+    /// decays + soft-deletes, not just the lower-level static method.
+    func test_runPersistencePass_appliesDecayAndSoftDeletesViaQueue() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("decay-persist-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var cfg = Configuration(); cfg.foreignKeysEnabled = true
+        let q = try DatabaseQueue(
+            path: dir.appendingPathComponent("steward.sqlite").path,
+            configuration: cfg
+        )
+        try Migrations.migrator.migrate(q)
+
+        let veryOld = Date(timeIntervalSince1970: 1_500_000_000)
+        let item = MemoryItem(
+            memoryID: "m_persist",
+            type: .observation,
+            text: "ancient observation",
+            embedding: Array(repeating: 0.1, count: 4),
+            embeddingDim: 4,
+            embeddingRevision: "rev",
+            strengthAtLastUpdate: 1.0,
+            lastStrengthUpdateAt: veryOld,
+            lastAccessedAt: nil,
+            createdAt: veryOld,
+            expiresAt: nil,
+            domain: nil,
+            provenanceEventIDs: []
+        )
+        try await q.write { db in try item.upsert(in: db) }
+
+        let outcome = await MemoryDecayJob.runPersistencePass(on: q, now: Date())
+
+        XCTAssertNotNil(outcome, "persistence pass should run against a healthy queue")
+        XCTAssertEqual(outcome?.scanned, 1)
+        XCTAssertEqual(outcome?.softDeleted, 1,
+                       "ancient observation must fall below 0.05 and soft-delete")
+        try await q.read { db in
+            let s = try Double.fetchOne(
+                db,
+                sql: "SELECT strength_at_last_update FROM memory_items WHERE memory_id='m_persist'"
+            )
+            XCTAssertEqual(s, 0.0)
+        }
+    }
+
+    /// Calling the persistence pass twice in immediate succession must be a
+    /// no-op on the second run — both the BGTask refresh handler and the
+    /// app-launch kick may fire on the same tick (foreground after refresh).
+    /// Idempotence prevents redundant writes from amplifying clock skew.
+    func test_runPersistencePass_isIdempotentWithinASecond() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("decay-idem-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var cfg = Configuration(); cfg.foreignKeysEnabled = true
+        let q = try DatabaseQueue(
+            path: dir.appendingPathComponent("steward.sqlite").path,
+            configuration: cfg
+        )
+        try Migrations.migrator.migrate(q)
+
+        let now = Date()
+        let item = MemoryItem(
+            memoryID: "m_idem",
+            type: .observation,
+            text: "freshly stamped",
+            embedding: Array(repeating: 0.1, count: 4),
+            embeddingDim: 4,
+            embeddingRevision: "rev",
+            strengthAtLastUpdate: 1.0,
+            lastStrengthUpdateAt: now,
+            lastAccessedAt: nil,
+            createdAt: now,
+            expiresAt: nil,
+            domain: nil,
+            provenanceEventIDs: []
+        )
+        try await q.write { db in try item.upsert(in: db) }
+
+        let first = await MemoryDecayJob.runPersistencePass(on: q, now: now)
+        let second = await MemoryDecayJob.runPersistencePass(on: q, now: now)
+
+        XCTAssertEqual(first?.updated, 0,
+                       "freshly stamped row is < 1 day old; nothing to persist")
+        XCTAssertEqual(second?.updated, 0, "second pass within the same second is a no-op")
+    }
 }

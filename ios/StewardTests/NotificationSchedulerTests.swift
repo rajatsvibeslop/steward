@@ -249,16 +249,21 @@ final class NotificationSchedulerTests: XCTestCase {
         )
         guard case .scheduled = briefOutcome else { return XCTFail() }
 
-        // One non-brief — allowed.
+        // One non-brief — allowed. Fire at 19:00 NYC, outside quiet hours
+        // (22:00-05:00), > 90 min from brief at 17:00.
         let firstOutcome = await sched.schedule(
-            makeRequest(kind: .instrumentNudge, at: base.addingTimeInterval(60 * 60 * 8)),
+            makeRequest(kind: .instrumentNudge, at: base.addingTimeInterval(60 * 60 * 7)),
             scope: .coordinator
         )
         guard case .scheduled = firstOutcome else { return XCTFail() }
 
-        // Second non-brief — blocked.
+        // Second non-brief — must land OUTSIDE quiet hours so mercy is the
+        // reason it's blocked, not quiet-hours suppression (which precedes
+        // mercy in scheduleInternal). Fire at 21:00 NYC: 2h after first
+        // non-brief (gap passes), still <22:00 (quiet passes), mercy count
+        // for same day = 1 → blocked with .mercyModeCap.
         let secondOutcome = await sched.schedule(
-            makeRequest(kind: .windDown, at: base.addingTimeInterval(60 * 60 * 11)),
+            makeRequest(kind: .windDown, at: base.addingTimeInterval(60 * 60 * 9)),
             scope: .coordinator
         )
         switch secondOutcome {
@@ -285,6 +290,12 @@ final class NotificationSchedulerTests: XCTestCase {
     func testSystemErrorWhenUNAddThrows() async {
         // Fake center that always throws → scheduler must surface
         // .systemError, NEVER .capExceeded. Deslop FIX #6.
+        //
+        // FixedClock + fire at noon+1h NYC keeps the request out of quiet
+        // hours (22:00-05:00). With a SystemClock + wall-clock Date(), CI
+        // runs between 21:00 and 04:00 would land the fire inside quiet
+        // hours and quiet-hours suppression would precede the UN.add path
+        // we're trying to exercise.
         final class ThrowingCenter: UserNotificationCenterProtocol, @unchecked Sendable {
             func add(_ request: UNNotificationRequest) async throws {
                 throw NSError(domain: "test", code: 99)
@@ -293,15 +304,23 @@ final class NotificationSchedulerTests: XCTestCase {
             func pendingNotificationRequests() async -> [UNNotificationRequest] { [] }
         }
         let provider = FakeSettingsProvider(snapshot: defaultSettings())
+        let tz = TimeZone(identifier: "America/New_York")!
+        var noonComps = DateComponents()
+        noonComps.year = 2026; noonComps.month = 5; noonComps.day = 17
+        noonComps.hour = 12; noonComps.minute = 0
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let noon = cal.date(from: noonComps)!
+        let clock = FixedClock(noon)
+
         let scheduler = NotificationScheduler(
             center: ThrowingCenter(),
             settings: provider,
-            clock: SystemClock(),
-            timeZone: { TimeZone(identifier: "America/New_York")! },
+            clock: clock,
+            timeZone: { tz },
             ruleStore: { nil }
         )
         let outcome = await scheduler.schedule(
-            makeRequest(at: Date().addingTimeInterval(3600)),
+            makeRequest(at: noon.addingTimeInterval(3600)),
             scope: .coordinator
         )
         if case .systemError(let reason) = outcome {

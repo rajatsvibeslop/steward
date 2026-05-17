@@ -132,11 +132,16 @@ final class RecurringRuleStoreTests: XCTestCase {
             defaultAgentTemperature: 0.7
         ))
         let tz = TimeZone(identifier: "America/New_York")!
-        var noonComps = DateComponents()
-        noonComps.year = 2026; noonComps.month = 5; noonComps.day = 17
-        noonComps.hour = 12; noonComps.minute = 0
+        // Anchor BEFORE today's 07:00 brief so the expander includes it as
+        // occurrence #1. RecurringExpander.nextOccurrences filters by
+        // `fire > anchor`, so an anchor at noon would (correctly) skip
+        // today's 07:00 brief and yield only 6 occurrences — that's not
+        // what this test wants to exercise.
+        var anchorComps = DateComponents()
+        anchorComps.year = 2026; anchorComps.month = 5; anchorComps.day = 17
+        anchorComps.hour = 6; anchorComps.minute = 30
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let clock = FixedClock(cal.date(from: noonComps)!)
+        let clock = FixedClock(cal.date(from: anchorComps)!)
 
         let scheduler = NotificationScheduler(
             center: center,
@@ -175,11 +180,14 @@ final class RecurringRuleStoreTests: XCTestCase {
 
         let center = FakeUNCenter()
         let tz = TimeZone(identifier: "America/New_York")!
-        var noonComps = DateComponents()
-        noonComps.year = 2026; noonComps.month = 5; noonComps.day = 17
-        noonComps.hour = 12; noonComps.minute = 0
+        // Anchor BEFORE today's 07:00 brief so the expander includes it
+        // (same rationale as testTopUpHorizonReissuesPersistedRule: noon
+        // would skip today's already-past 07:00).
+        var anchorComps = DateComponents()
+        anchorComps.year = 2026; anchorComps.month = 5; anchorComps.day = 17
+        anchorComps.hour = 6; anchorComps.minute = 30
         var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
-        let clock = FixedClock(cal.date(from: noonComps)!)
+        let clock = FixedClock(cal.date(from: anchorComps)!)
 
         let scheduler = NotificationScheduler(
             center: center,

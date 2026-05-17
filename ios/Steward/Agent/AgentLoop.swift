@@ -1,6 +1,6 @@
 //
 //  AgentLoop.swift
-//  Steward — Track B
+//  Steward
 //
 //  One actor owns one user-session's turn loop. Per addendum §1.1 + §1.10:
 //
@@ -28,7 +28,7 @@ import Foundation
 // MARK: - Shared budget
 
 /// Wraps the mutable `TurnBudget` so the agent.handoff tool (which runs
-/// inside the LLM's tool-call auto-loop) and the AgentLoop (which spawns
+/// inside the LLM's tool-call auto-loop) and `AgentLoop` (which spawns
 /// it) can share a single counter without races.
 public actor SharedBudget {
     public private(set) var budget: TurnBudget
@@ -83,8 +83,8 @@ public func defaultRuntimeSettingsReader(now: Date) async -> (mercy: MercyMode, 
 
 // MARK: - Domain resolution
 
-/// Looks up an active `DomainAgent` by domain identifier. Track C / Pod E
-/// own the canonical `domains` table reader; for v0.9 the AgentLoop ships
+/// Looks up an active `DomainAgent` by domain identifier. the domains store / UI
+/// own the canonical `domains` table reader; for v0.9 AgentLoop ships
 /// with a closure-based resolver so tests can inject fixtures and the real
 /// app wires in a DB-backed implementation.
 public protocol DomainAgentResolver: Sendable {
@@ -353,7 +353,7 @@ public actor AgentLoop {
         var isRefusal: Bool { self == .refusal }
     }
 
-    /// Tests + Track E's chat-replay path read the current state to render
+    /// Tests + the UI's chat-replay path read the current state to render
     /// the right input prompt / chip set.
     public func currentConversationState() -> ConversationState {
         return conversationState

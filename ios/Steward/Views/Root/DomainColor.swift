@@ -1,6 +1,6 @@
 //
 //  DomainColor.swift
-//  Steward — Track E
+//  Steward
 //
 //  Stable mapping from a `domain` identifier to a SwiftUI Color drawn from the
 //  eight-color palette in `design/ui-specs.md` §1.2. Same domain string always

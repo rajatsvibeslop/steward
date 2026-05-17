@@ -1,6 +1,6 @@
 //
 //  EmptyStateRouter.swift
-//  Steward — Track B
+//  Steward
 //
 //  Deterministic Branch A/B/C classifier from
 //  design/coordinator-empty-state-v2.md §2.

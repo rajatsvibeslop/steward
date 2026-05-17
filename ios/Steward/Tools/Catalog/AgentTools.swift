@@ -2,28 +2,23 @@
 //  AgentTools.swift
 //  Steward
 //
-//  Spec §8 cross-agent: agent.handoff / agent.cross_consult. These are
-//  catalog-level **signatures only** — the bodies live inside Track B's
-//  AgentLoop (the handoff loop wraps the entire coordinator→domain dispatch
-//  and is conceptually part of the loop state machine, not a leaf tool).
+//  Spec §8 cross-agent tools. The catalog ships `AgentCrossConsultTool`
+//  here (a leaf tool with no runtime deps).
 //
-//  Track C exposes the schemas so the tool catalog enumeration is complete
-//  and so any deserialization tests can round-trip the arg shapes. When Pod
-//  B wires up its loop, it overrides these implementations by registering
-//  its own `LLMTool` conformances with the same `id`.
+//  `agent.handoff` is NOT in this file: it's wired in `Agent/AgentLoop.swift`
+//  as a real `LLMTool` whose `invoke()` consumes a `TurnBudget` hop and spawns
+//  a domain session. That dance can't be a leaf tool because it needs
+//  per-turn dependencies (budget, resolver, registry, factory, timezone,
+//  clock) and lives inside the handoff state machine.
+//
+//  `agent.cross_consult` is registered in the catalog but should be
+//  intercepted by `AgentLoop` before reaching `invoke()`. If `invoke()`
+//  fires, that's a wiring bug — the tool throws to signal it.
 //
 
 import Foundation
 
-// MARK: - agent.handoff
-//
-// The canonical `AgentHandoffTool` lives in `Agent/AgentLoop.swift` (Pod B).
-// Pod B's AgentLoop registers it when building the coordinator's tool list
-// with all the runtime dependencies it needs (budget, resolver, registry,
-// factory, temperature, timezone, clock). `ToolCatalog.allTrackCTools()`
-// no longer registers a placeholder here — registration is Pod B's job.
-
-// MARK: - agent.cross_consult (signature placeholder)
+// MARK: - agent.cross_consult
 
 struct AgentCrossConsultArgs: Codable, Equatable, Sendable {
     let domain: String

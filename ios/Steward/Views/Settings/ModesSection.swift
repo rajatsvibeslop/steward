@@ -1,6 +1,6 @@
 //
 //  ModesSection.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.3. Mercy and pause toggles. Engaging shows a duration picker;
 //  disengaging is one tap (no "Are you sure?" — §3.3 forbids friction).

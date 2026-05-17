@@ -1,6 +1,6 @@
 //
 //  WhisperKitModelLocator.swift
-//  Steward — Track F
+//  Steward
 //
 //  Hard reject #15: WhisperKit models MUST be bundled — lazy-download on first
 //  use is forbidden (the user expects voice capture to work on the subway).

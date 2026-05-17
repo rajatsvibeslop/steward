@@ -1,6 +1,6 @@
 //
 //  TurnBudget.swift
-//  Steward — Track B
+//  Steward
 //
 //  Per addendum §1.1 — shared cross-agent handoff budget.
 //
@@ -38,7 +38,7 @@ public struct TurnBudget: Sendable, Equatable {
     }
 }
 
-/// Errors the AgentLoop and its helpers surface. No `fatalError`/`precondition`
+/// Errors AgentLoop and its helpers surface. No `fatalError`/`precondition`
 /// in production paths (§4 hard reject #3); all failures route through here
 /// or `LLMSessionError`.
 public enum AgentError: Error, CustomStringConvertible, Equatable {

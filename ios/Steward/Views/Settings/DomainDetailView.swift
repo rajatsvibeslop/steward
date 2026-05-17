@@ -1,9 +1,9 @@
 //
 //  DomainDetailView.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.4. Edit name + role_prompt; archive (no delete). Updates flow
-//  through the existing Pod C `domain.update_prompt` / `domain.archive` tools
+//  through the existing `domain.update_prompt` / `domain.archive` tools
 //  so audit-log entries and InverseActions stay consistent with everything
 //  else the agent might do.
 //

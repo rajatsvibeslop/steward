@@ -162,7 +162,7 @@ enum RunningAccumulator: InstrumentKind {
         // Editable cell: `value`. Totals (today_total, seven_day_avg,
         // thirty_day_avg) are render-only — edits there are silently
         // ignored. Match table rows to state.windowEvents by chronological
-        // index (Pod F's CSV preserves render order).
+        // index (the CSV mirror layer CSV preserves render order).
         var out: [ManualCorrection] = []
         for (_, row, entry) in CSVDiff.pairedRows(table: table, stateEntries: current.windowEvents) {
             guard let valueStr = CSVDiff.cellAt(row: row, header: table.header, column: "value"),

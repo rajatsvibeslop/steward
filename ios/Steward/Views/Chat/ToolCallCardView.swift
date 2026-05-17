@@ -1,6 +1,6 @@
 //
 //  ToolCallCardView.swift
-//  Steward — Track E
+//  Steward
 //
 //  Inline tool-call card per Designer §1.3. Collapsed by default; tap the row
 //  to expand and reveal "What" / "Why" / "Result" + the Undo button (if the

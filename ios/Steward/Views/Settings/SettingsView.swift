@@ -1,8 +1,8 @@
 //
 //  SettingsView.swift
-//  Steward — Track E
+//  Steward
 //
-//  Replaces the Track A scaffold. Native grouped Form layout per Designer §3.1.
+//  Replaces the app entry point. Native grouped Form layout per Designer §3.1.
 //
 
 import SwiftUI

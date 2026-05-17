@@ -8,7 +8,7 @@
 //  first install week — never rely on them for correctness).
 //
 //  Handler responsibilities:
-//   - drain sync queue (Track F owns the actual drain; this just kicks the
+//   - drain sync queue (CSVMirrorTools owns the actual drain; this just kicks the
 //     refresh actor when it lands)
 //   - call NotificationScheduler.topUpHorizon(daysAhead: 7)
 //   - reschedule the next BGAppRefreshTask before returning
@@ -26,8 +26,8 @@ actor BGTaskCoordinator {
     static let shared = BGTaskCoordinator()
 
     private let scheduler: NotificationScheduler
-    /// Track F drains this; we keep an optional reference so that when F
-    /// lands it can be wired in without touching Track D code.
+    /// CSVMirrorTools drains this; we keep an optional reference so the
+    /// drain can be wired in without touching this file.
     private var syncDrainer: (@Sendable () async -> Void)?
 
     init(scheduler: NotificationScheduler = .shared) {

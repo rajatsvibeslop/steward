@@ -2,7 +2,7 @@
 //  ToolCatalog.swift
 //  Steward
 //
-//  Single entry point Pod B's AgentLoop calls to enumerate the full tool
+//  Single entry point AgentLoop calls to enumerate the full tool
 //  surface. Returns one `LLMTool` per spec §8 entry (minus the EventKit /
 //  notifications / CSV mirror / WhisperKit tools owned by Pods D and F —
 //  those pods register their own catalogs and merge into this one at
@@ -12,7 +12,7 @@
 import Foundation
 
 enum ToolCatalog {
-    /// Full Track-C surface. Pod B merges this with Pod D + Pod F catalogs
+    /// Tool-catalog surface. AgentLoopHost merges this with the EventKit + Notifications + HealthKit tool sets
     /// when building the coordinator's available-tools list.
     static func allTrackCTools(
         provider: DatabaseProvider = .shared,
@@ -49,7 +49,7 @@ enum ToolCatalog {
             DomainListTool(provider: provider),
             DomainUpdatePromptTool(provider: provider, now: now),
             DomainArchiveTool(provider: provider, now: now),
-            // Cross-agent (Pod B registers `AgentHandoffTool` itself with
+            // Cross-agent (AgentLoop registers `AgentHandoffTool` itself with
             // its runtime deps when building the coordinator tool list; we
             // only contribute `cross_consult`, which is a true leaf tool).
             AgentCrossConsultTool(),

@@ -24,7 +24,7 @@ enum NotificationKind: String, Codable, Sendable, CaseIterable {
     case instrumentNudge
     case commitmentDue
     case recoveryNudge
-    /// UXR v2 §6 day-0 onboarding followup (Pod B's FollowupScheduler).
+    /// UXR v2 §6 day-0 onboarding followup (the `FollowupScheduler`).
     /// Fires once at now+5h30m clamped to [13:00, 17:00] local; body varies
     /// by whether the user captured at least one event since onboarding.
     case onboardingFollowup

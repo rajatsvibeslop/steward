@@ -1,6 +1,6 @@
 //
 //  MessageBubble.swift
-//  Steward — Track E
+//  Steward
 //
 //  Visual treatment per Designer §1.2. Three speakers must be visually
 //  unambiguous: user (trailing, accent), coordinator (leading, secondary

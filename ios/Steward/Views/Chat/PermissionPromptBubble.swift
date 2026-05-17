@@ -1,6 +1,6 @@
 //
 //  PermissionPromptBubble.swift
-//  Steward — Track E
+//  Steward
 //
 //  Inline permission-grant card per implementation-addendum §1.9. Rendered
 //  when a tool throws `PermissionRequiredSignal` (EventKit) or

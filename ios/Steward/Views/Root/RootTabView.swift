@@ -1,8 +1,8 @@
 //
 //  RootTabView.swift
-//  Steward — Track E
+//  Steward
 //
-//  Replaces Track A's RootView. Three tabs in fixed order — Chat, Today,
+//  Replaces the v0 RootView. Three tabs in fixed order — Chat, Today,
 //  Settings — per Designer §0 ("Default launch tab: Chat"). The selection
 //  binding is exposed so the Today empty-state and "+ Add a team via chat"
 //  Settings row can switch tabs programmatically.

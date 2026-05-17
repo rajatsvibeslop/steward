@@ -1,6 +1,6 @@
 //
 //  DomainAgent.swift
-//  Steward — Track B
+//  Steward
 //
 //  One DomainAgent per active row in the `domains` table. Carries:
 //   - the user-set `role_prompt` (one of the three RolePromptTemplates or

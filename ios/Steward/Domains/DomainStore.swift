@@ -1,15 +1,15 @@
 //
 //  DomainStore.swift
-//  Steward — Track E
+//  Steward
 //
 //  Serialized read surface over the `domains` table. Used by:
 //   - the UI (Today section headers, Settings Life Teams list, Chat domain
 //     bubble rendering)
-//   - `DBDomainAgentResolver`, which Pod B's AgentLoop calls to look up the
+//   - `DBDomainAgentResolver`, which AgentLoop calls to look up the
 //     active `DomainAgent` for a hand-off
 //
 //  Writes for renames / role-prompt edits / archive flow through the existing
-//  Pod C tools (`domain.update_prompt`, `domain.archive`) so audit-log
+//  tool-catalog tools (`domain.update_prompt`, `domain.archive`) so audit-log
 //  reasoning + InverseAction wiring stay consistent with everything else. The
 //  store only exposes reads + a thin update helper that goes through the
 //  tools.
@@ -128,7 +128,7 @@ actor DomainStore {
 
 // MARK: - DomainAgentResolver conformance
 
-/// DB-backed resolver Pod B's AgentLoop calls during hand-offs. Reads the
+/// DB-backed resolver AgentLoop calls during hand-offs. Reads the
 /// active domains table and constructs a `DomainAgent` per row.
 struct DBDomainAgentResolver: DomainAgentResolver {
     let store: DomainStore

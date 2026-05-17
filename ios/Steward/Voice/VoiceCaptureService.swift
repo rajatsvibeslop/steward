@@ -1,6 +1,6 @@
 //
 //  VoiceCaptureService.swift
-//  Steward — Track F
+//  Steward
 //
 //  Hold-to-talk voice capture per spec §14. Owns:
 //   - AVAudioEngine recording into a PCM buffer (16 kHz mono Float32 for Whisper)
@@ -160,7 +160,7 @@ actor VoiceCaptureService {
         case denied
     }
 
-    /// Deployment target is iOS 18.4 (set by Pod A), so `AVAudioApplication`
+    /// Deployment target is iOS 18.4 (project setting), so `AVAudioApplication`
     /// (iOS 17+) is always available — no `#available` fallback.
     nonisolated func currentMicPermission() -> MicPermission {
         switch AVAudioApplication.shared.recordPermission {

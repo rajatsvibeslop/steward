@@ -1,6 +1,6 @@
 //
 //  CoordinatorEmptyStateCopy.swift
-//  Steward — Track B
+//  Steward
 //
 //  VERBATIM copy from design/coordinator-empty-state-v2.md, injected into
 //  the coordinator's system prompt when `activeDomains.isEmpty &&
@@ -16,7 +16,7 @@
 //
 //  This file does NOT compose user-facing strings — it carries the
 //  authoritative templates the LLM uses. The static greeting bubble (§1.1
-//  first sentence) is UI-rendered (Pod E owns), not LLM-emitted, but it's
+//  first sentence) is UI-rendered (`MorningBriefCard` owns it), not LLM-emitted, but it's
 //  included here so the LLM sees it and stays on-voice.
 //
 
@@ -90,7 +90,7 @@ public enum CoordinatorEmptyStateCopy {
         sitting on you. We can add more later; nothing's permanent.
         """
 
-    /// §4.1 fast-tap chip labels (UI-rendered by Pod E; reproduced for
+    /// §4.1 fast-tap chip labels (UI-rendered by `ChatView`; reproduced for
     /// LLM context).
     public static let branchB_step1_chipLabels =
         "Sleep · Money · The kitchen · Hobbies · Something else"

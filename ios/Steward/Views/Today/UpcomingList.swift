@@ -1,6 +1,6 @@
 //
 //  UpcomingList.swift
-//  Steward — Track E
+//  Steward
 //
 //  Per Designer §2.5. Renders both commitments due in the next 24h AND
 //  notifications scheduled in the next 24h as a single time-ordered list.

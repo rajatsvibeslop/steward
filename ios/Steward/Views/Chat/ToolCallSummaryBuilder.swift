@@ -1,8 +1,8 @@
 //
 //  ToolCallSummaryBuilder.swift
-//  Steward — Track E
+//  Steward
 //
-//  Deterministic projection from a Pod B `LLMToolInvocation` (raw tool call
+//  Deterministic projection from an `LLMToolInvocation` (raw tool call
 //  receipt) to a `ToolCallSummary` the Chat UI renders. The verb/object table
 //  comes verbatim from `design/ui-specs.md` §1.3 — no LLM composition.
 //
@@ -15,7 +15,7 @@ import Foundation
 enum ToolCallSummaryBuilder {
 
     /// Project one raw invocation into a UI summary. `actorLabel` is the
-    /// pre-resolved persona name ("Steward" or "{Domain} team"). Pod B emits
+    /// pre-resolved persona name ("Steward" or "{Domain} team"). AgentLoop emits
     /// invocations on the coordinator's session so the UI defaults to
     /// "Steward" unless the tool itself encodes a domain in its args.
     static func build(
@@ -171,7 +171,7 @@ enum ToolCallSummaryBuilder {
     }
 
     /// Reversibility per Designer §1.3 list. v1.1 extended coverage to all
-    /// mutating Pod C tools; the only excluded Pod C kind is `event.capture`,
+    /// mutating tool-catalog tools; the only excluded instrument kind is `event.capture`,
     /// which is append-only by design (events table forbids DELETE — hard
     /// reject #10) and so has no inverse.
     private static func isReversible(_ toolID: ToolID) -> Bool {

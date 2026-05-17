@@ -1,6 +1,6 @@
 //
 //  CSVMirrorTools.swift
-//  Steward — Track F
+//  Steward
 //
 //  Implements the three `csv_mirror.*` tools listed in spec §8:
 //   - csv_mirror.ensure_instrument_file(instrument_id)

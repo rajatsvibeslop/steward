@@ -1,6 +1,6 @@
 //
 //  TimingSection.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.2. Brief time / quiet hours / nudge cap / min gap. Each row
 //  pushes to a detail screen so the Settings list stays scannable.

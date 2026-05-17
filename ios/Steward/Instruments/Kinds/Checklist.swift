@@ -204,7 +204,7 @@ enum Checklist: InstrumentKind {
         for row in table.rows {
             guard let rowID = CSVDiff.cellAt(row: row, header: table.header, column: "__row_id"),
                   definition.items.contains(where: { $0.id == rowID }) else {
-                // Unknown rowID — skip rather than throw; Pod F may have a
+                // Unknown rowID — skip rather than throw; the CSV mirror layer may have a
                 // stale row from a removed item.
                 continue
             }

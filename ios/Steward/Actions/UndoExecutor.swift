@@ -118,7 +118,7 @@ actor UndoExecutor {
             //    exists in the store; flip `isCompleted` back to false.
             //  - undo-of-delete: payload.ekReminderID is empty/missing;
             //    recreate from the captured payload.
-            // Pod D owns both gateway methods (reopen + create), so the
+            // the EventKit gateway owns both methods (reopen + create), so the
             // executor can run real handlers in v1 — not notYetImplemented.
             if let ekID = payload.ekReminderID, !ekID.isEmpty {
                 let result = await gateway.executeReminderReopen(ekReminderID: ekID)
@@ -160,9 +160,9 @@ actor UndoExecutor {
             // undid (deslop regression B).
             await scheduler.cancelRule(ruleID: ruleID)
 
-        // ---- Pod C / cross-pod cases (real handlers — no throws) ----
+        // ---- DB-only inverse actions (no throws) ----
         //
-        // All five below were `notYetImplemented` in the Pod B handoff; Pod C
+        // All five below were `notYetImplemented` in earlier passes; the catalog
         // owned the implementation. Each handler:
         //   - performs the inverse via a single `db.write { }` transaction,
         //   - asserts the mutation actually touched a row (no silent no-op),
@@ -201,7 +201,7 @@ actor UndoExecutor {
             // is preserved (no DELETE) so any provenance references survive.
             try await setMemoryArchived(memoryID: memoryID, archived: true)
 
-        // ---- Pod C v1.1 patch: remaining 8-tool undo coverage ----
+        // ---- v1.1 patch: remaining 8-tool undo coverage ----
         //
         // Same pattern as the 5 above: single `db.write { }`, assert affected
         // rows so no silent no-op, emit a `manual_correction` audit row.
@@ -268,7 +268,7 @@ actor UndoExecutor {
         }
     }
 
-    // MARK: - Pod C handler helpers
+    // MARK: - DB-mutation handler helpers
 
     /// Replay every event for `instrumentID` EXCEPT `excludingEventID` from
     /// `K.initialState`, persist the recomputed state, and write a
@@ -577,7 +577,7 @@ actor UndoExecutor {
     }
 
     /// DELETE a commitment row. Commitments table has no inbound FKs we care
-    /// about; ek_reminder_id is Pod D's mirror, undone via its own handlers.
+    /// about; ek_reminder_id is the EventKit gateway mirror, undone via its own handlers.
     /// Throws on row-not-found.
     private func deleteCommitmentRow(commitmentID: CommitmentID) async throws {
         let queue = try await provider.database()

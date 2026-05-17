@@ -1,6 +1,6 @@
 //
 //  AuditLogView.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.5. Reads externally-mutating agent events from the `events`
 //  table, decodes `TurnAction` from `payload_json`, and offers per-row undo
@@ -31,11 +31,11 @@ final class AuditLogViewModel: ObservableObject {
 
     /// Subset of `events.kind` we surface in the activity feed (Designer §3.5).
     /// Membership is gated on whether the tool actually writes a TurnAction
-    /// audit row — Pod C tools without a matching `InverseAction` case don't
+    /// audit row — tool-catalog tools without a matching `InverseAction` case don't
     /// emit one, so listing them here would render rows the user can't undo
     /// (qa-1's bug: "Nothing to undo" alerts). v1.1 expanded coverage from
-    /// the original 5 Pod C tools to all 12 mutating Pod C tools; the only
-    /// excluded Pod C kind is `event.capture`, which is append-only by
+    /// the original 5 tool-catalog tools to all 12 mutating tool-catalog tools; the only
+    /// excluded instrument kind is `event.capture`, which is append-only by
     /// design (events table forbids DELETE — hard reject #10) and so has
     /// no inverse.
     static let externallyMutating: Set<String> = [

@@ -1,6 +1,6 @@
 //
 //  AgentTypes.swift
-//  Steward — Track B
+//  Steward
 //
 //  Shared value types for the agent loop. These are deliberately small and
 //  free of FoundationModels dependencies so other pods (C, D) can pull
@@ -12,7 +12,7 @@ import Foundation
 // MARK: - Identifiers
 //
 // `TurnID` and `ActionID` are declared in `Actions/TurnAction.swift`
-// (Pod D's strongly-typed structs). Pod B's earlier `init(raw:)` and
+// (strongly-typed structs). An earlier `init(raw:)` and
 // `.raw` API is preserved as an alias on the canonical structs so
 // existing AgentLoop call sites stay working.
 
@@ -26,9 +26,9 @@ public enum AgentRole: Sendable, Equatable, Hashable {
     case domain(String) // domain identifier ("health", "money", ...)
 }
 
-/// `ActorRef` is declared in `Actions/TurnAction.swift` (Pod D's canonical
+/// `ActorRef` is declared in `Actions/TurnAction.swift` (the canonical
 /// definition). `ActorRef.dbValue` returns the same string vocabulary
-/// that Pod B's earlier `dbActor` did.
+/// that the earlier `dbActor` did.
 
 // MARK: - Runtime context
 
@@ -110,7 +110,7 @@ public struct CommitmentSummary: Sendable, Equatable, Hashable, Codable {
 
 // MARK: - Turn outcome
 
-/// What the AgentLoop returns to the caller after one user message.
+/// What AgentLoop returns to the caller after one user message.
 public struct CoordinatorResponse: Sendable, Equatable {
     public let turnID: TurnID
     public let text: String

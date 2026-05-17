@@ -1,8 +1,8 @@
 //
 //  ChatView.swift
-//  Steward — Track E
+//  Steward
 //
-//  Replaces Track A's scaffold. Owns the empty-state vs. transcript switch,
+//  Replaces the v0 scaffold. Owns the empty-state vs. transcript switch,
 //  drives the input bar, and renders one of the typed `ChatMessage` cases
 //  per row.
 //
@@ -57,7 +57,7 @@ struct ChatView: View {
             .onReceive(NotificationCenter.default.publisher(
                 for: .voiceCaptureReadinessChanged
             )) { _ in
-                // Track F bootstrap posts this once WhisperKit eager init
+                // CSV-mirror + voice bootstrap posts this once WhisperKit eager init
                 // completes (success or fail). Re-read availability so the
                 // mic flips from disabled-with-tooltip to active when ready.
                 Task { await refreshVoiceAvailability() }

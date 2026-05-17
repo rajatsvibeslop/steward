@@ -240,7 +240,7 @@ enum BoundedWindow: InstrumentKind {
               let endHM = parseHHMM(endTarget) else { return nil }
         // v1 simplification: interpret HH:mm targets in UTC so the math is
         // deterministic across test machines and devices. The user's local-
-        // time interpretation lives in Track D's NotificationTemplate, which
+        // time interpretation lives in the `NotificationTemplate`, which
         // converts to local on render. v1.1: add TimeZone to Definition.
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC") ?? .gmt

@@ -1,6 +1,6 @@
 //
 //  AboutSection.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.7. Foundation Models status dot, app version, export hook.
 //

@@ -2,7 +2,7 @@
 //  DatabaseProvider.swift
 //  Steward
 //
-//  Track A: single-writer DatabaseQueue provider per implementation-addendum §3
+//  Module entry: single-writer DatabaseQueue provider per implementation-addendum §3
 //  ("GRDB DatabaseQueue (single-writer) — not DatabasePool").
 //
 //  Other pods get the queue via `await DatabaseProvider.shared.database()`.

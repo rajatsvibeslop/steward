@@ -1,6 +1,6 @@
 //
 //  CSVMirrorWatcher.swift
-//  Steward — Track F
+//  Steward
 //
 //  Implements the deterministic reconciliation algorithm from
 //  implementation-addendum §1.4. Owns:
@@ -75,7 +75,7 @@ struct InstrumentSnapshot: Sendable {
 /// Marker prefix written into `ManualCorrection.reason` when the correction
 /// originated from a conflict-merge disagreement. The next-turn coordinator
 /// context surfaces these as "the user should review this cell". Encoded in
-/// the reason string because Pod C's `ManualCorrection` doesn't carry a
+/// the reason string because the `ManualCorrection` doesn't carry a
 /// dedicated `requires_user_attention` flag in v1.
 let CSVMirrorConflictReasonPrefix = "conflict_resolution:requires_user_attention "
 
@@ -204,7 +204,7 @@ actor CSVMirrorWatcher {
         let allCorrections = resolved.disagreements + coderCorrections
 
         // Emit each correction as a `manual_correction` event AND fold it
-        // into instrument state via Pod C's registry. Single db.write so
+        // into instrument state via the `InstrumentRegistry`. Single db.write so
         // event insert + state update + sync_queue enqueue are atomic.
         let emittedCount = try await writeCorrections(
             allCorrections,
@@ -434,7 +434,7 @@ actor CSVMirrorWatcher {
                 encoder.outputFormatting = [.sortedKeys]
                 encoder.dateEncodingStrategy = .iso8601
                 for c in corrections {
-                    // Fold into instrument state first; if Pod C's
+                    // Fold into instrument state first; if the registry
                     // applyManualCorrection throws, abort the whole batch.
                     let newStateJSON = try InstrumentRegistry.applyCorrection(
                         kindID: snap.kind,

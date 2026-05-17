@@ -1,6 +1,6 @@
 //
 //  InstrumentDisplay.swift
-//  Steward — Track E
+//  Steward
 //
 //  Per-kind value/delta projection for the Today tab's instrument cards
 //  (Designer §2.3). Read-only.

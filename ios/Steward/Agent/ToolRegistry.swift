@@ -1,9 +1,9 @@
 //
 //  ToolRegistry.swift
-//  Steward — Track B
+//  Steward
 //
-//  Lookup surface for concrete `LLMTool` implementations. Track C lands
-//  the real instrument/event/memory tools; Track D the calendar/reminder/
+//  Lookup surface for concrete `LLMTool` implementations. the tool-catalog lands
+//  the real instrument/event/memory tools; the EventKit/Notifications layer owns the calendar/reminder/
 //  notification tools. Both register against this protocol so the
 //  AgentLoop never sees concrete types — only `LLMTool` + `ToolID`.
 //
@@ -12,7 +12,7 @@ import Foundation
 
 public protocol ToolRegistry: Sendable {
     /// Look up a tool by its typed ID. Returns nil if the ID isn't
-    /// registered (e.g. Track C hasn't landed its tool yet); the AgentLoop
+    /// registered (e.g. the tool is not yet registered); AgentLoop
     /// surfaces a typed `toolNotFound` to the LLM as a structured error.
     func tool(for id: ToolID) async -> (any LLMTool)?
 

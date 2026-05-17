@@ -1,6 +1,6 @@
 //
 //  NetworkObserver.swift
-//  Steward — Track F
+//  Steward
 //
 //  `NWPathMonitor` wrapper that drives the sync queue worker per spec §13:
 //  "Network state observer (NWPathMonitor) drives sync queue worker."

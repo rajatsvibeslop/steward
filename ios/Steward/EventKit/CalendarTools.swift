@@ -348,7 +348,7 @@ private func wireOrThrow(_ result: CalendarToolResult) throws -> String {
         return json
     case .permissionRequired(let scope):
         // HARD REJECT #19: never let this enum case reach the model. Tools
-        // throw it; the dispatcher (Track B) catches it on the host side and
+        // throw it; AgentLoop catches it on the host side and
         // runs the inline-grant flow before retrying the tool call.
         throw PermissionRequiredSignal(scope: scope)
     case .permissionDenied(let scope, let hint):
@@ -376,7 +376,7 @@ private func encodeStatus(_ status: String, scope: EKPermissionScope, hint: Stri
 }
 
 /// Signal type thrown by EventKit tools when the result is `.permissionRequired`.
-/// Track B's dispatcher catches this on the host side BEFORE the result reaches
+/// AgentLoop catches this on the host side BEFORE the result reaches
 /// `LanguageModelSession`, runs the inline-grant flow, and retries the tool
 /// call once.
 ///

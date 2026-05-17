@@ -1,6 +1,6 @@
 //
 //  LLMSession.swift
-//  Steward — Track B
+//  Steward
 //
 //  Provider-agnostic abstraction for on-device LLM calls.
 //  Per implementation-addendum §1.10 (verbatim signatures).
@@ -18,7 +18,7 @@ import Foundation
 
 // MARK: - Backend identification
 
-/// What backend produced a given response. The UI (Track E) reads this and
+/// What backend produced a given response. The UI (the UI) reads this and
 /// stamps a `STUB` chip on every `.mock(...)` reply.
 public enum LLMBackendKind: Sendable, Codable, Equatable {
     case foundationModels
@@ -99,7 +99,7 @@ public protocol LLMSession: Actor {
 }
 
 /// Factory for creating fresh per-turn sessions. The factory is the unit
-/// the resolver returns; the AgentLoop holds it and mints a new session
+/// the resolver returns; AgentLoop holds it and mints a new session
 /// per user turn (addendum §3 FM bullet: "wrap each turn in a fresh
 /// LanguageModelSession").
 public protocol LLMSessionFactory: Sendable {

@@ -1,6 +1,6 @@
 //
 //  CSVMirrorPaths.swift
-//  Steward — Track F
+//  Steward
 //
 //  Resolves the on-disk layout for the iCloud Drive CSV mirror, per
 //  spec §12 + addendum §1.4. Single source of truth for path strings so the
@@ -28,7 +28,7 @@ import Foundation
 /// never touch the real iCloud container.
 enum CSVMirrorRoot: Sendable {
     /// Resolve `FileManager.url(forUbiquityContainerIdentifier:)` at access
-    /// time. The container id is the entitlement Pod A landed
+    /// time. The container id is the entitlement landed
     /// (`iCloud.com.rajatscode.steward`).
     case ubiquityContainer(identifier: String, subfolder: String)
     /// Use the app's `Application Support/<subfolder>` directory. Triggered
@@ -93,7 +93,7 @@ struct CSVMirrorPaths: Sendable {
             // The container's Documents/ subdirectory is what shows up in
             // Files.app under iCloud Drive when
             // NSUbiquitousContainerIsDocumentScopePublic is true (it is, per
-            // Pod A's Info.plist).
+            // the app bootstrap's Info.plist).
             let root = container
                 .appendingPathComponent("Documents", isDirectory: true)
                 .appendingPathComponent(subfolder, isDirectory: true)

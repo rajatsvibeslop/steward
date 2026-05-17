@@ -24,7 +24,7 @@ import GRDB
 //   - ExpressibleByStringLiteral: ergonomic test fixtures and migrations
 //   - DatabaseValueConvertible (GRDB): direct bind/read against TEXT columns
 //   - CustomStringConvertible: log-friendly
-//   - `raw` alias: Pod B's earlier code paths used `.raw`; both work
+//   - `raw` alias: earlier code paths used `.raw`; both work
 //
 // `static func generate()` returns a UUID-shaped ID. Tools that need a
 // lex-ordered ULID call `ULID.generate(now:)` and wrap with `init(rawValue:)`.
@@ -34,7 +34,7 @@ public struct ActionID: Hashable, Codable, Sendable, RawRepresentable, Expressib
     public init(rawValue: String) { self.rawValue = rawValue }
     public init(_ rawValue: String) { self.rawValue = rawValue }
     public init(stringLiteral value: String) { self.rawValue = value }
-    /// Legacy alias — earlier Pod B code reads `id.raw`.
+    /// Legacy alias — earlier code reads `id.raw`.
     public var raw: String { rawValue }
     public var description: String { rawValue }
     public static func generate() -> ActionID {
@@ -54,7 +54,7 @@ public struct TurnID: Hashable, Codable, Sendable, RawRepresentable, Expressible
     public init(rawValue: String) { self.rawValue = rawValue }
     public init(_ rawValue: String) { self.rawValue = rawValue }
     public init(stringLiteral value: String) { self.rawValue = value }
-    /// Legacy alias — earlier Pod B code reads `id.raw`.
+    /// Legacy alias — earlier code reads `id.raw`.
     public var raw: String { rawValue }
     public var description: String { rawValue }
     public static func generate() -> TurnID {
@@ -123,7 +123,7 @@ public struct NotificationID: Hashable, Codable, Sendable, RawRepresentable, Exp
     }
 }
 
-/// Stable instrument primary-key wrapper. Pod C's tools generate fresh
+/// Stable instrument primary-key wrapper. Callers generate fresh
 /// IDs via `ULID.generate(now:)` and wrap them with `init(rawValue:)`.
 public struct InstrumentID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
     public let rawValue: String
@@ -252,10 +252,10 @@ enum ActorRef: Codable, Sendable, Equatable, Hashable {
         }
     }
 
-    /// Bridge from Pod C's `EventActor`. The two enums share the same set of
-    /// cases but live in different layers (Pod C went through EventLog first,
+    /// Bridge from `DB/EventLog`'s `EventActor`. The two enums share the same set of
+    /// cases but live in different layers (the EventLog landed first,
     /// then we layered the audit log on top). Keeping the bridge here means
-    /// Pod C tools don't have to import an AuditLog-private helper to call
+    /// tool-catalog tools don't have to import an AuditLog-private helper to call
     /// `recordAgentAction`.
     static func from(_ eventActor: EventActor) -> ActorRef {
         switch eventActor {
@@ -436,7 +436,7 @@ enum InverseAction: Codable, Sendable, Equatable {
 
     /// Undo a `commitment.create` — DELETE the row. Commitments are not
     /// append-only (unlike events / memory_items) so deletion is safe; the
-    /// only outbound reference is `ek_reminder_id`, which Pod D mirrors
+    /// only outbound reference is `ek_reminder_id`, which the EventKit layer mirrors
     /// independently via its own undo handlers.
     case deleteCommitment(commitmentID: CommitmentID)
 
@@ -513,7 +513,7 @@ enum UndoOutcome: Sendable, Equatable {
 
 /// Kind tag for `InverseAction`. Used in `UndoExecutorError.notYetImplemented`
 /// so cross-pod cases (memory / domain / instrument event-replay) can throw a
-/// typed "Pod C hasn't wired this yet" error WITHOUT introducing a `default:`
+/// typed "not yet implemented" error WITHOUT introducing a `default:`
 /// arm in the undo switch (hard reject #4). Adding an InverseAction case must
 /// also add a kind case here — the test in `UndoExecutorTests` asserts parity.
 enum InverseActionKind: String, Codable, Sendable, CaseIterable {

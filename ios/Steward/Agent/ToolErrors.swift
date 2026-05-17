@@ -6,8 +6,8 @@
 //  small `ToolJSON` namespace for deterministic, sortedKeys JSON encode /
 //  decode of tool args + results.
 //
-//  Pod C's leaf tools throw `LLMToolError(code:, message:)` for any
-//  caller-facing failure; Pod B's AgentLoop catches these and forwards
+//  leaf tools throw `LLMToolError(code:, message:)` for any
+//  caller-facing failure; AgentLoop catches these and forwards
 //  the structured payload back to the LLM as a tool-result. Production
 //  paths must NEVER use `fatalError` / `preconditionFailure` (hard
 //  reject #3) — every tool failure becomes a typed error here.
@@ -37,10 +37,10 @@ public struct LLMToolError: Error, Equatable, Sendable, CustomStringConvertible 
 
 // MARK: - ToolError (non-LLM-visible failures)
 
-/// Categorical error thrown by Pod D's EventKit / Notification tools
+/// Categorical error thrown by the EventKit / Notification tools
 /// when an `invoke(...)` call surfaces a failure that should NOT be fed
 /// back to the LLM as a normal tool result (e.g. malformed arg JSON,
-/// permission revocations). Pod D's UI surfaces these directly; Pod B's
+/// permission revocations). the UI surfaces these directly; AgentLoop
 /// AgentLoop swallows them into a structured tool-result string.
 public enum ToolErrorKind: String, Sendable, Equatable, Hashable {
     /// Args couldn't be parsed (malformed JSON, missing required keys,
@@ -78,7 +78,7 @@ public struct ToolError: Error, Equatable, Sendable, CustomStringConvertible {
 
 /// Deterministic JSON helpers shared across every leaf tool.
 ///
-/// `sortedKeys` matters because (a) Pod C's tool-result snapshots in
+/// `sortedKeys` matters because (a) the tool-result snapshots in
 /// tests compare strings, and (b) the audit log stores
 /// `events.payload_json` verbatim — non-deterministic output would
 /// thrash diffs and CSV mirrors for no reason.

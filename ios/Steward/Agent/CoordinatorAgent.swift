@@ -1,6 +1,6 @@
 //
 //  CoordinatorAgent.swift
-//  Steward — Track B
+//  Steward
 //
 //  The coordinator is the only thing the user chats with by default
 //  (spec §7). Owns the empty-state flow scripting; uses the

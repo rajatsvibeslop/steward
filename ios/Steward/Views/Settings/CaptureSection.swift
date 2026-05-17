@@ -1,6 +1,6 @@
 //
 //  CaptureSection.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.6. Voice + iCloud mirror toggles.
 //

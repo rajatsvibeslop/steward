@@ -51,7 +51,7 @@ public protocol VoiceCapture: AnyObject, Sendable {
 }
 
 /// Process-wide handle. Default is `MissingVoiceCapture`; `StewardApp`'s
-/// Track F bootstrap swaps in `VoiceCaptureAdapter()` once
+/// CSV-mirror + voice bootstrap swaps in `VoiceCaptureAdapter()` once
 /// `VoiceCaptureService.shared.initializeIfNeeded()` returns. Reads from
 /// main-thread UI code go through this `@MainActor` enum.
 @MainActor

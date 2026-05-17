@@ -1,6 +1,6 @@
 //
 //  TodayViewModel.swift
-//  Steward — Track E
+//  Steward
 //
 //  Pulls together everything Today renders: the most recent morning brief,
 //  every active instrument grouped by domain, commitments due in the next

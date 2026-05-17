@@ -1,6 +1,6 @@
 //
 //  MorningBriefCard.swift
-//  Steward — Track E
+//  Steward
 //
 //  Top card on the Today tab. Renders the most recent morning brief (or its
 //  empty-domain variant) per Designer §2.2.

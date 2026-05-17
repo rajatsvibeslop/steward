@@ -1,6 +1,6 @@
 //
 //  ChatMessage.swift
-//  Steward — Track E
+//  Steward
 //
 //  One row in the chat transcript. Tool-call cards are first-class items so
 //  they render inline between bubbles per Designer §1.3 (NOT inside the

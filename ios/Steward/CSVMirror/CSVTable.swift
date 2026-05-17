@@ -1,21 +1,21 @@
 //
 //  CSVTable.swift
-//  Steward — Track F
+//  Steward
 //
-//  Track F operates on the canonical `CSVTable` value type defined by Pod C
+//  Operates on the canonical `CSVTable` value type defined elsewhere
 //  (`ios/Steward/Instruments/InstrumentKind.swift`). We do NOT redeclare it
 //  here — that would re-introduce the duplicate-type compile error that the
-//  Pod-F-pre-merge work used a separate struct for.
+//  an earlier work used a separate struct for.
 //
-//  This file ADDS what Pod C's `CSVTable` doesn't have: an RFC-4180-ish
-//  parser/serializer (Pod C only constructs tables in-memory; the disk
+//  This file ADDS what the canonical `CSVTable` doesn't have: an RFC-4180-ish
+//  parser/serializer (the existing in-memory `CSVTable` only constructs tables in-memory; the disk
 //  round-trip lives here) and `__row_id` partitioning. Both are extensions
 //  on `CSVTable` so callers see one type.
 //
 
 import Foundation
 
-/// Reserved column names. Pod C's `CSVTable.make(kindColumns:rows:)`
+/// Reserved column names. The canonical `CSVTable.make(kindColumns:rows:)`
 /// auto-prepends `__row_id`, `__steward_version`, `__last_synced_at` in
 /// that order; these constants let us look them up by name without
 /// peppering string literals across the watcher.

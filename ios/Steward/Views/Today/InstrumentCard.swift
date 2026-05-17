@@ -1,6 +1,6 @@
 //
 //  InstrumentCard.swift
-//  Steward — Track E
+//  Steward
 //
 //  Per Designer §2.3. Two-column grid; each card shows name, large primary
 //  value + optional unit, delta line with muted color coding, and (if stale

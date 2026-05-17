@@ -137,7 +137,7 @@ struct InstrumentCreateTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row + undo handle. Inverse archives the
+        // Audit-log row + undo handle. Inverse archives the
         // freshly-created instrument so the agent surface stops listing it.
         let action = TurnAction(
             turnID: TurnID.generate(),
@@ -452,7 +452,7 @@ struct InstrumentApplyEventTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row: persists the inverse so Settings → Recent
+        // Audit-log row: persists the inverse so Settings → Recent
         // actions can offer one-tap undo against this event. Settings reads
         // events.kind == ToolID.rawValue and expects payload_json.turn_action.
         // The semantic event row from EventLog.append above is what
@@ -476,7 +476,7 @@ struct InstrumentApplyEventTool: LLMTool {
                 source: "tool:instrument.apply_event"
             )
         } catch {
-            // Pod D's pattern: audit write failure must not crash the
+            // the pattern: audit write failure must not crash the
             // primary tool result — the instrument mutation already
             // committed. UndoExecutor handles the "no audit row found"
             // path explicitly via UndoOutcome.notFound.
@@ -584,7 +584,7 @@ struct InstrumentUpdateDefinitionTool: LLMTool {
             return prior
         }
 
-        // Track-D parity audit row + undo handle. Inverse restores the
+        // Audit-log row + undo handle. Inverse restores the
         // pre-update definition JSON we captured above.
         let action = TurnAction(
             turnID: TurnID.generate(),
@@ -695,7 +695,7 @@ struct InstrumentArchiveTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row + undo handle. Inverse clears archived_at.
+        // Audit-log row + undo handle. Inverse clears archived_at.
         let action = TurnAction(
             turnID: TurnID.generate(),
             toolID: .instrumentArchive,

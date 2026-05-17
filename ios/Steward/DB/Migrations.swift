@@ -2,7 +2,7 @@
 //  Migrations.swift
 //  Steward
 //
-//  Track A: GRDB DatabaseMigrator with the full v1 schema baked into a single
+//  Module entry: GRDB DatabaseMigrator with the full v1 schema baked into a single
 //  named migration. No production data exists yet, so additions defined in
 //  the implementation-addendum (state_version, embedding_revision,
 //  strength_at_last_update, last_strength_update_at, FTS5 triggers, etc.)
@@ -37,17 +37,17 @@ enum Migrations {
             try createSettingsTable(db)
         }
 
-        // v2 — Track D: NotificationScheduler.topUpHorizon needs persistent
+        // v2 — EventKit/Notifications: NotificationScheduler.topUpHorizon needs persistent
         // recurring rules so the next 7+ days of notifications can be
         // re-issued on every foreground tick. Without this, BGTasks failing
-        // in install week silently kills the morning brief. Pod A's v1 had
+        // in install week silently kills the morning brief. the app bootstrap's v1 had
         // no rule-persistence table; v2 adds one. Additive, no production
         // data exists.
         migrator.registerMigration("v2_notification_recurring_rules") { db in
             try createNotificationRecurringRulesTable(db)
         }
 
-        // v3 — Track C audit/undo patch: undo of `memory.save` /
+        // v3 — the tool-catalog audit/undo patch: undo of `memory.save` /
         // `memory.forget` needs a single column to flip so the inverse is a
         // one-statement UPDATE that round-trips cleanly. Strength-based
         // soft-delete (strength=0) was lossy for restore — the original
@@ -155,7 +155,7 @@ enum Migrations {
             CREATE INDEX memory_strength_lazy
             ON memory_items(strength_at_last_update DESC, last_strength_update_at)
         """)
-        // Pod C does an `embedding_revision != ?` sweep on launch (addendum
+        // the embedder does an `embedding_revision != ?` sweep on launch (addendum
         // §2.3 lazy-rebuild). Index keeps that cheap.
         try db.execute(sql: "CREATE INDEX memory_embedding_revision ON memory_items(embedding_revision)")
 
@@ -325,7 +325,7 @@ enum Migrations {
 }
 
 extension Migrations {
-    // MARK: - notification_recurring_rules (Track D, v2)
+    // MARK: - notification_recurring_rules (added in v2)
     //
     // One row per active recurring notification (RRULE subset). Each row is
     // the "rule of record" — NotificationScheduler.topUpHorizon re-expands

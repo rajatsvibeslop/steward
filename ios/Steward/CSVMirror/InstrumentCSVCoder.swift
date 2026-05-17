@@ -1,17 +1,17 @@
 //
 //  InstrumentCSVCoder.swift
-//  Steward — Track F
+//  Steward
 //
-//  Adapter that lifts Pod C's `InstrumentKind` (addendum §1.2) into the
-//  closure-based coder Track F's `CSVMirrorWatcher` actually dispatches on.
+//  Adapter that lifts the `InstrumentKind` (addendum §1.2) into the
+//  closure-based coder that `CSVMirrorWatcher` actually dispatches on.
 //
 //  Two pieces:
 //   1. `InstrumentCSVCoder` — Sendable value type holding closures the watcher
 //      calls. Pre-merge this was a parallel adapter; post-merge it bridges
-//      Pod C's protocol surface (`K.renderCSV`, `K.parseCSVOverride`) plus a
+//      the `InstrumentKind` protocol surface (`K.renderCSV`, `K.parseCSVOverride`) plus a
 //      generic state.csv renderer that walks the state JSON.
 //   2. `InstrumentCSVCoderRegistry` — actor map `kindID -> InstrumentCSVCoder`.
-//      `TrackFBootstrap.registerKindCoders()` registers all 7 of Pod C's
+//      `TrackFBootstrap.registerKindCoders()` registers all 7 of the registered InstrumentKinds
 //      kinds; `CSVMirrorWatcher` looks up by `instruments.kind`.
 //
 //  Hard reject #9 still holds: no `switch kindID { ... }` anywhere; every
@@ -20,7 +20,7 @@
 
 import Foundation
 
-/// Operations the CSV mirror needs per kind. Track C's `InstrumentKind`
+/// Operations the CSV mirror needs per kind. the tool-catalog `InstrumentKind`
 /// static funcs map onto these closures via `InstrumentCSVCoder.init(kind:)`.
 struct InstrumentCSVCoder: Sendable {
     /// Render the canonical editable table for an instrument. Mirrors
@@ -31,7 +31,7 @@ struct InstrumentCSVCoder: Sendable {
         _ recentEventsJSON: [String]
     ) throws -> CSVTable
 
-    /// Render the write-only `state.csv` snapshot. Pod C's `InstrumentKind`
+    /// Render the write-only `state.csv` snapshot. the `InstrumentKind`
     /// doesn't expose a per-kind state renderer in v1, so this defaults to a
     /// generic "field, value" walk over the state JSON's top-level keys —
     /// kind-agnostic and useful for "what does Steward think my state is".
@@ -41,7 +41,7 @@ struct InstrumentCSVCoder: Sendable {
     ) throws -> CSVTable
 
     /// Compute corrections from a user-edited table. Mirrors
-    /// `K.parseCSVOverride(_:current:definition:)`. Returns Pod C's typed
+    /// `K.parseCSVOverride(_:current:definition:)`. Returns the typed
     /// `ManualCorrection`s; the watcher emits each as a `manual_correction`
     /// event and folds it back into state via `InstrumentRegistry.applyCorrection`.
     let parseOverride: @Sendable (
@@ -136,7 +136,7 @@ extension InstrumentCSVCoder {
 // MARK: - Registry
 
 /// Process-wide registry mapping `instruments.kind` strings to a coder.
-/// `TrackFBootstrap.registerKindCoders()` calls `register` for each of Pod C's
+/// `TrackFBootstrap.registerKindCoders()` calls `register` for each of the registered
 /// 7 built-in kinds at app boot; the watcher looks them up by the row's
 /// `kind` column.
 actor InstrumentCSVCoderRegistry {

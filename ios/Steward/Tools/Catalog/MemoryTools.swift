@@ -215,7 +215,7 @@ struct MemorySaveTool: LLMTool {
                 )
             }
 
-            // Track-D parity audit row. Settings → Recent actions surfaces this
+            // Audit-log row. Settings → Recent actions surfaces this
             // by `kind == ToolID.memorySave.rawValue` and offers undo via
             // `.unforgetMemory(memoryID)` — flips archived_at so retrieval
             // stops seeing the row.
@@ -424,7 +424,7 @@ struct MemoryForgetTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row. Undo path restores `archived_at = NULL`
+        // Audit-log row. Undo path restores `archived_at = NULL`
         // AND bumps strength so the reranker re-surfaces the row.
         let auditAction = TurnAction(
             turnID: TurnID.generate(),
@@ -540,7 +540,7 @@ struct MemoryStrengthenTool: LLMTool {
             return snapshot
         }
 
-        // Track-D parity audit row + undo handle. Inverse restores the
+        // Audit-log row + undo handle. Inverse restores the
         // exact prior strength + last_strength_update_at so the lazy decay
         // formula picks up where it left off (not "undo time" as anchor).
         let action = TurnAction(

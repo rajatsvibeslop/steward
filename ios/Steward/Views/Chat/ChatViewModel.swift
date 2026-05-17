@@ -1,6 +1,6 @@
 //
 //  ChatViewModel.swift
-//  Steward — Track E
+//  Steward
 //
 //  Bridges the SwiftUI ChatView to the agent loop. Owns the in-memory
 //  transcript and the per-turn lifecycle:
@@ -443,7 +443,7 @@ final class ChatViewModel: ObservableObject {
         messages.removeAll(where: { $0.id == id })
     }
 
-    /// Try to fish an event_id out of a tool-result JSON. Many Pod C tools
+    /// Try to fish an event_id out of a tool-result JSON. Many tool-catalog tools
     /// return `{"event_id":"..."}` on success; the audit-log queries in
     /// Settings can find the same row by that id. Failure → nil (the card
     /// still renders, just without an inline Undo button).

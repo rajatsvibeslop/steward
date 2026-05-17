@@ -1,6 +1,6 @@
 //
 //  ChatInputBar.swift
-//  Steward — Track E
+//  Steward
 //
 //  Per Designer §1.5–1.6. Text field grows to multi-line up to ~6 lines;
 //  right-edge button toggles between send (when field has content) and mic

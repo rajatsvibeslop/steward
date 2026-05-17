@@ -1,6 +1,6 @@
 //
 //  TodayEmptyState.swift
-//  Steward — Track E
+//  Steward
 //
 //  Per Designer §2.6. Forward-looking, calm; "Open Chat" button switches
 //  tabs but does NOT auto-send a message. Copy is verbatim per the spec.

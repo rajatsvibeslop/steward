@@ -1,10 +1,10 @@
 //
 //  CSVMirrorAvailability.swift
-//  Steward — Track F (v1.1 patch)
+//  Steward
 //
 //  The CSV mirror prefers iCloud Drive's ubiquity container; when that
 //  container can't be resolved (iCloud Drive switched off, no signed-in
-//  iCloud account, simulator without iCloud, etc.) the bootstrap falls back
+//  iCloud account, simulator without iCloud, etc.) the boot path falls back
 //  to the app sandbox's Application Support directory.
 //
 //  v1 silently degraded to the sandbox: Settings copy still said "Mirrors
@@ -94,7 +94,7 @@ enum CSVMirrorAvailabilityClassifier {
 /// Process-wide holder for the resolved availability. Written once at
 /// bootstrap (TrackFBootstrap.run); read off the main actor by Settings
 /// + Today. Read-mostly so we use an isolated actor and surface a synchronous
-/// main-actor snapshot via `@MainActor` mirror updated when the bootstrap
+/// main-actor snapshot via `@MainActor` mirror updated when the boot path
 /// publishes — same pattern as `VoiceCaptureRegistry.current`.
 @MainActor
 enum CSVMirrorAvailabilityRegistry {

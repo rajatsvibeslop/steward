@@ -1,6 +1,6 @@
 //
 //  LLMResolver.swift
-//  Steward — Track B
+//  Steward
 //
 //  Picks the right `LLMSessionFactory` at runtime:
 //    1. If the iOS 26 SDK is present at compile time AND the runtime is

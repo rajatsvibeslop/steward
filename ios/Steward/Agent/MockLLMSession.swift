@@ -1,6 +1,6 @@
 //
 //  MockLLMSession.swift
-//  Steward — Track B
+//  Steward
 //
 //  Deterministic fixture set for the six canned turns from
 //  implementation-addendum §1.10. **Pure function of (systemPrompt,
@@ -14,7 +14,7 @@
 //  ignores those lines — they are just additional system-prompt text.
 //
 //  All response text is prefixed `[MOCK]` so the UI banner is reinforced
-//  inline (Pod E shows a STUB chip on every mock reply).
+//  inline (the chat UI shows a STUB chip on every mock reply).
 //
 //  Determinism notes:
 //   - `Date` values appear in `LLMToolInvocation.executedAt` for audit
@@ -715,7 +715,7 @@ public struct MockResponsePlan: Sendable, Equatable {
 
     /// Encodes any `Encodable` args struct as the JSON string the tool's
     /// decoder will accept (sortedKeys + iso8601). For args used by tools
-    /// that go through `ToolJSON` (Pod C catalog: domain/instrument/event/
+    /// that go through `ToolJSON` (the catalog tools: domain/instrument/event/
     /// settings/memory/commitments), this round-trips by construction.
     static func encodeArgs<T: Encodable>(_ value: T) -> String {
         let enc = JSONEncoder()
@@ -732,7 +732,7 @@ public struct MockResponsePlan: Sendable, Equatable {
         return "{}"
     }
 
-    /// Same as `encodeArgs` — Pod D notification/calendar/reminder tools
+    /// Same as `encodeArgs` — the EventKit + Notifications tools
     /// also use iso8601 dates, but they live on their own decoders. Naming
     /// the helper separately documents the distinct intent at call sites.
     static func encodeArgsISO<T: Encodable>(_ value: T) -> String {

@@ -1,6 +1,6 @@
 //
 //  LifeTeamsSection.swift
-//  Steward — Track E
+//  Steward
 //
 //  Designer §3.4. List of active domain rows; tap to push DomainDetailView.
 //  "+ Add a team via chat" row switches to the Chat tab (no auto-message).

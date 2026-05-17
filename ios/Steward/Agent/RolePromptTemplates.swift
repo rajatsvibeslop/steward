@@ -1,6 +1,6 @@
 //
 //  RolePromptTemplates.swift
-//  Steward — Track B
+//  Steward
 //
 //  Verbatim from design/coordinator-empty-state-v2.md §7. These strings
 //  are written into `domains.role_prompt` when the user picks a behavioral
@@ -23,7 +23,7 @@ public enum RolePromptTone: String, Sendable, Codable, CaseIterable {
     case pushBackALittle
     case pushHard
 
-    /// Display label for the chip in Track E's UI.
+    /// Display label for the chip in the UI.
     public var displayLabel: String {
         switch self {
         case .stayGentle:        return "Stay gentle. Just track."

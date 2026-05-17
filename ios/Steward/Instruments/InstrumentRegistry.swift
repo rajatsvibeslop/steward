@@ -2,7 +2,7 @@
 //  InstrumentRegistry.swift
 //  Steward
 //
-//  Track C: registry + dispatch for InstrumentKind conformances (addendum §1.2).
+//  Instrument layer: registry + dispatch for InstrumentKind conformances (addendum §1.2).
 //
 //  HARD REJECT #9 ENFORCEMENT: nothing outside this file may `switch` on a
 //  kind string. The registry is the one allowed dispatch site. New kinds are
@@ -85,7 +85,7 @@ enum InstrumentRegistry {
                           _ fromVersion: Int,
                           _ definitionJSON: String) throws -> String
 
-        /// Apply a manual correction (Pod F path).
+        /// Apply a manual correction (the CSV mirror layer path).
         let applyCorrectionJSON: (_ correction: ManualCorrection,
                                   _ stateJSON: String,
                                   _ definitionJSON: String) throws -> String
@@ -229,7 +229,7 @@ enum InstrumentRegistry {
         return try entry.initialStateJSON(definitionJSON, now)
     }
 
-    /// Apply a CSV-derived correction. Used by Pod F's reconciliation path.
+    /// Apply a CSV-derived correction. Used by the CSV mirror layer reconciliation path.
     /// Returns the updated state JSON; caller persists + writes the
     /// `manual_correction` event.
     static func applyCorrection(

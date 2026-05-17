@@ -1,6 +1,6 @@
 //
 //  FoundationModelsSession.swift
-//  Steward — Track B
+//  Steward
 //
 //  Real-LLM conformance to `LLMSession`. Entire file body wrapped in
 //  `#if canImport(FoundationModels)` so the Xcode 16.3 build skips it

@@ -133,7 +133,7 @@ actor SettingsStore {
         enc.keyEncodingStrategy = .convertToSnakeCase
         enc.dateEncodingStrategy = .iso8601
         // Stable on-disk ordering helps the iCloud CSV mirror present
-        // diff-able settings.json snapshots later (Pod F may render this).
+        // diff-able settings.json snapshots later (the CSV mirror layer may render this).
         // Locked in addendum §1.11.
         enc.outputFormatting = [.sortedKeys]
         self.encoder = enc

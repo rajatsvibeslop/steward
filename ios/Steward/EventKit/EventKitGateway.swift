@@ -139,7 +139,7 @@ actor EventKitGateway {
             case .remindersFullAccess, .remindersWriteOnly:
                 // iOS 17+ exposes `requestFullAccessToReminders`; the
                 // write-only Reminders variant landed in iOS 26 SDK only
-                // (Xcode 26 toolchain). Track D builds on Xcode 16.3 / iOS
+                // (Xcode 26 toolchain). this codebase builds on Xcode 16.3 / iOS
                 // 18.4, so both write-only and full-access scopes map to
                 // `requestFullAccessToReminders` until the toolchain bump.
                 // The mapping is upward-compatible: a user who granted

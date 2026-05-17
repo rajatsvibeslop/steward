@@ -132,7 +132,7 @@ struct DomainCreateTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row so Settings → Recent actions can offer
+        // Audit-log row so Settings → Recent actions can offer
         // one-tap undo. Inverse of domain.create is unarchive of the row
         // (we re-archive it on undo to hide it from the LLM tool surface).
         let action = TurnAction(
@@ -319,7 +319,7 @@ struct DomainUpdatePromptTool: LLMTool {
             return prior
         }
 
-        // Track-D parity audit row + undo handle. Inverse writes the
+        // Audit-log row + undo handle. Inverse writes the
         // captured prior role_prompt back.
         let action = TurnAction(
             turnID: TurnID.generate(),

@@ -1,11 +1,11 @@
 //
 //  FollowupScheduler.swift
-//  Steward — Track B
+//  Steward
 //
 //  Implements the day-0 afternoon followup notification from
 //  design/coordinator-empty-state-v2.md §6.
 //
-//  Body copy is NOT composed here (§1.3 + Pod D's hard reject #6). The
+//  Body copy is NOT composed here (§1.3 + the hard reject #6). The
 //  scheduler builds a `TemplateContext` + `NotificationRequest(kind:
 //  .onboardingFollowup, ...)` and hands it to `NotificationScheduler` —
 //  the canonical `NotificationTemplate.onboardingFollowup` arm owns the

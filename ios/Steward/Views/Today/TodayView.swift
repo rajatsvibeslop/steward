@@ -1,8 +1,8 @@
 //
 //  TodayView.swift
-//  Steward — Track E
+//  Steward
 //
-//  Replaces Track A's scaffold. Brief card → instrument sections (per domain)
+//  Replaces the v0 scaffold. Brief card → instrument sections (per domain)
 //  → upcoming. Pull-to-refresh re-runs brief generation and re-reads state.
 //
 

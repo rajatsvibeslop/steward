@@ -1,6 +1,6 @@
 //
 //  ConversationState.swift
-//  Steward — Track B
+//  Steward
 //
 //  Tracks where the user is in the coordinator empty-state script
 //  (design/coordinator-empty-state-v2.md). The AgentLoop owns the

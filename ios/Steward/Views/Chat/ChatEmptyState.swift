@@ -1,6 +1,6 @@
 //
 //  ChatEmptyState.swift
-//  Steward — Track E
+//  Steward
 //
 //  First-launch greeting from `CoordinatorEmptyStateCopy.greeting(forLocalHour:)`
 //  (the LLM does NOT emit this — see UXR v2 §1.1). Two chips ride below the

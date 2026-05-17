@@ -2,7 +2,7 @@
 //  StewardApp.swift
 //  Steward
 //
-//  Track A scaffold: app entry point. Bootstraps the database on launch
+//  app entry point: app entry point. Bootstraps the database on launch
 //  so the GRDB migrator runs before any view requests data.
 //
 
@@ -62,7 +62,7 @@ final class AppBootstrap: ObservableObject {
         do {
             _ = try await DatabaseProvider.shared.database()
 
-            // Track F bootstrap: CSV mirror + network-driven sync + voice eager init.
+            // CSV-mirror + voice bootstrap: CSV mirror + network-driven sync + voice eager init.
             // All best-effort — voice failing (no model) or iCloud unavailable
             // must not block the app from opening.
             await TrackFBootstrap.run()
@@ -93,7 +93,7 @@ final class AppBootstrap: ObservableObject {
     }
 }
 
-/// Track F bootstrap. Resolves the iCloud Drive container (falling back to
+/// CSV-mirror + voice bootstrap. Resolves the iCloud Drive container (falling back to
 /// app-support if unavailable), wires the CSVMirrorWatcher into the tools
 /// façade, kicks off the NWPathMonitor that drains the sync queue, and
 /// schedules the WhisperKit eager-init off the main actor so the first
@@ -101,7 +101,7 @@ final class AppBootstrap: ObservableObject {
 enum TrackFBootstrap {
     static func run() async {
         // 0. Wire each registered InstrumentKind into the CSV mirror via the
-        //    InstrumentCSVCoder adapter. Pod C's InstrumentRegistry.bootstrapAll()
+        //    InstrumentCSVCoder adapter. InstrumentRegistry.bootstrapAll()
         //    runs above us in AppBootstrap.start (line 55), so by this point
         //    all 7 kinds are registered with the typed registry and we just
         //    need to plug their renderCSV/parseCSVOverride into our CSV
@@ -177,9 +177,9 @@ enum TrackFBootstrap {
         }
     }
 
-    /// Register one `InstrumentCSVCoder` per Pod C kind. Adding a kind is
+    /// Register one `InstrumentCSVCoder` per instrument kind. Adding a kind is
     /// one line here + one line in `InstrumentRegistry.bootstrapAll()`.
-    /// Both lists are kept in sync — if Pod C adds an 8th kind, this method
+    /// Both lists are kept in sync — if a new InstrumentKind is added, this method
     /// gets one more line and that's it. No string-keyed dispatch anywhere
     /// (hard reject #9 still holds; the registry is the single dispatch site).
     static func registerKindCoders() async {

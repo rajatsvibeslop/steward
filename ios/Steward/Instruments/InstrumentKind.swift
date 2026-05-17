@@ -2,8 +2,8 @@
 //  InstrumentKind.swift
 //  Steward
 //
-//  Track C: the typed-state-machine protocol every instrument kind conforms to.
-//  Owned by Pod C per addendum §1.2. The InstrumentRegistry dispatches by
+//  Instrument layer: the typed-state-machine protocol every instrument kind conforms to.
+//  Defined per addendum §1.2. The InstrumentRegistry dispatches by
 //  `K.id`; nothing in the app keys behavior off the kind string directly
 //  (addendum §4 hard reject #9).
 //
@@ -19,8 +19,8 @@ import Foundation
 // Canonical typed-ID structs live in `Actions/TurnAction.swift`
 // (`InstrumentID`, `EventID`, `MemoryID`, `CommitmentID`, `NotificationID`).
 // We deliberately removed the typealias-to-String declarations that used to
-// live here to avoid cross-pod duplicate declarations; the integration
-// patch resolves all collisions onto Pod D's strongly-typed structs so the
+// live here to avoid cross-module duplicate declarations; the integration
+// patch resolves all collisions onto strongly-typed structs so the
 // undo system can rely on type-safe inverse actions.
 
 // MARK: - Shared shapes
@@ -40,7 +40,7 @@ struct InstrumentEvent<Payload: Codable & Sendable>: Codable, Sendable {
 }
 
 /// A user-initiated correction applied outside the normal event flow.
-/// Produced by Pod F's CSV reconciliation when the user hand-edits the
+/// Produced by the CSV mirror layer CSV reconciliation when the user hand-edits the
 /// instrument's CSV mirror. Each kind decides how to fold it into State.
 struct ManualCorrection: Codable, Sendable {
     let correctionID: String
@@ -62,7 +62,7 @@ struct ManualCorrection: Codable, Sendable {
     }
 }
 
-/// Render target for `renderCSV`. Plain rows + a header. Pod F serializes
+/// Render target for `renderCSV`. Plain rows + a header. the CSV mirror layer serializes
 /// to disk; this struct is the deterministic in-memory shape.
 struct CSVTable: Equatable, Sendable {
     let header: [String]      // first three MUST be __row_id, __steward_version, __last_synced_at
@@ -166,7 +166,7 @@ protocol InstrumentKind {
     ) -> CSVTable
 
     /// Inspect a (possibly user-edited) CSV table and emit a list of
-    /// corrections that need to be applied. Pod F's CSVMirrorWatcher calls
+    /// corrections that need to be applied. the CSV mirror layer CSVMirrorWatcher calls
     /// this after diffing data.csv against the events table.
     static func parseCSVOverride(
         _ table: CSVTable,
@@ -192,7 +192,7 @@ enum CSVDiff {
 
     /// Iterate (rowIndex, row) pairs that have a corresponding state entry
     /// (i.e., truncated to min(table.rows.count, stateEntryCount)). Skips
-    /// "new rows" the user added — those become `log_entry` events at Pod F.
+    /// "new rows" the user added — those become `log_entry` events at the CSV-mirror layer.
     static func pairedRows<T>(
         table: CSVTable,
         stateEntries: [T]

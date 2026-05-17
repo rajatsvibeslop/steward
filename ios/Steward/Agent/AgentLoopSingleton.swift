@@ -1,27 +1,24 @@
 //
 //  AgentLoopSingleton.swift
-//  Steward — Track E wiring layer (NOT a canonical-surface stub).
+//  Steward
 //
-//  ARCH NOTE (vetted): this file glues Pod B's canonical `AgentLoop` actor
-//  (Agent/AgentLoop.swift) to live process-wide state — it does NOT
-//  redeclare or duplicate Pod B's surface. Pod B exposes `public actor
-//  AgentLoop` with a custom init taking factory + registry + resolver;
-//  there is no `AgentLoop.shared` in Pod B's canonical. `AgentLoopHost.shared`
-//  is the resolved-once container so the UI doesn't rebuild the tool
-//  registry on every chat send.
+//  Process-wide container that builds the `AgentLoop` (Agent/AgentLoop.swift)
+//  exactly once and caches it for the lifetime of the app. This file does NOT
+//  redeclare the loop — it only wires it up. `AgentLoop` itself takes
+//  factory + registry + resolver via its init; there is no `AgentLoop.shared`.
 //
-//  Process-wide AgentLoop assembled at app launch:
-//   - resolves the best `LLMSessionFactory` via `LLMResolver.resolve()`,
-//   - builds a `MapToolRegistry` populated with every Track C tool from
-//     `ToolCatalog.allTrackCTools()` PLUS Track D's calendar / notification /
-//     reminder tools (which require their own actors and aren't in the
-//     Track C catalog),
-//   - constructs `AgentLoop` with a `DBDomainAgentResolver` so hand-offs
-//     pick up live domain rows.
+//  At first call, `AgentLoopHost.shared.ready()`:
+//   - resolves the best `LLMSessionFactory` via `LLMResolver.resolve()`
+//     (Foundation Models when available, Mock otherwise),
+//   - builds a `MapToolRegistry` populated with the tool-catalog (from
+//     `ToolCatalog.allTrackCTools()`) PLUS the calendar / reminder /
+//     notification / HealthKit tools (their gateways are process-wide actors,
+//     not catalog leaf tools),
+//   - constructs `AgentLoop` with a `DBDomainAgentResolver` so handoffs pick
+//     up live domain rows.
 //
-//  The Chat UI awaits `AgentLoopHost.shared.ready()` so it never sends a
-//  message before the registry is populated. Resolution happens once per
-//  process; subsequent `ready()` calls return the cached host immediately.
+//  The chat UI awaits `ready()` before its first send so the registry is
+//  populated. Subsequent `ready()` calls return the cached host.
 //
 
 import Foundation
@@ -103,19 +100,21 @@ public actor AgentLoopHost {
         let resolution = await LLMResolver.resolve()
         let registry = MapToolRegistry()
 
-        // Track C tools — Pod C's catalog.
+        // Leaf tools from the catalog (events, instruments, commitments,
+        // memory, domains, settings, agent.cross_consult).
         for tool in ToolCatalog.allTrackCTools() {
             if let id = ToolID(rawValue: tool.id) {
                 await registry.register(tool, as: id)
             }
         }
 
-        // Track D tools — calendar/reminder/notification. These are actors
-        // and not in Pod C's catalog (different ownership), so we add them
-        // explicitly here. The two `AgentHandoffTool` instances differ:
-        // Pod C's catalog includes a signature-only placeholder; Pod B's
-        // AgentLoop installs the real budget-consuming one per-turn. We
-        // do NOT register the real handoff tool here — it's per-turn.
+        // Calendar / reminder / notification tools — backed by process-wide
+        // actors (EventKitGateway, NotificationScheduler), so they aren't in
+        // the catalog enumeration. They're added here, once, at app launch.
+        //
+        // We deliberately do NOT register the real `AgentHandoffTool` here.
+        // That tool needs per-turn dependencies (the shared TurnBudget) and
+        // is installed by `AgentLoop` itself each turn.
         let calendarRead = CalendarReadTool()
         let calendarWrite = CalendarWriteTool()
         let calendarModify = CalendarModifyTool()
@@ -140,10 +139,9 @@ public actor AgentLoopHost {
         await registry.register(notifCancel, as: .notificationCancel)
         await registry.register(notifList, as: .notificationListUpcoming)
 
-        // Track D (v1.1) — HealthKit read-only. The gateway holds an HKHealthStore;
-        // the tool dispatches through it just like the calendar tools dispatch
-        // through EventKitGateway. Per-turn instantiation isn't needed — the
-        // gateway is a process-wide actor.
+        // HealthKit read-only (v1.1). HKHealthStore lives on the gateway
+        // actor; this tool dispatches through it the same way calendar tools
+        // dispatch through EventKitGateway.
         let healthRead = HealthReadQuantityTool()
         await registry.register(healthRead, as: .healthReadQuantity)
 
@@ -154,7 +152,7 @@ public actor AgentLoopHost {
             temperature = settings.defaultAgentTemperature
         } catch {
             // Settings failure must not block the agent loop coming up. Fall
-            // back to the spec default — Pod A seeds 0.7. The user can edit
+            // back to the spec default — the app seeds 0.7. The user can edit
             // it from Settings once the DB recovers.
             temperature = 0.7
         }

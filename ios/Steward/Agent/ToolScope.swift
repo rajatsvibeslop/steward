@@ -1,11 +1,11 @@
 //
 //  ToolScope.swift
-//  Steward — Track B
+//  Steward
 //
 //  Typed tool surface from addendum §1.8. Replaces string-keyed dispatch
 //  for which agents can call which tools.
 //
-//  Track C implements concrete tools; they conform to `LLMTool` (see
+//  the tool-catalog implements concrete tools; they conform to `LLMTool` (see
 //  LLMSession.swift) and look up their `ToolID` from this enum. Domain
 //  agents get a constrained subset via `fixedArgs` (e.g. Money agent's
 //  `commitment.create` is forced to `domain="money"`).

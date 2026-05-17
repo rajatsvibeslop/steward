@@ -4,8 +4,8 @@
 //
 //  Spec §8 commitment tools: create / list / complete / abandon / snooze.
 //  Commitments are promised actions; they mirror to EventKit Reminders via
-//  Pod D's gateway (this tool family only writes to the local commitments
-//  table — Pod D's tools handle the EventKit side and stash ek_reminder_id
+//  the EventKit gateway (this tool family only writes to the local commitments
+//  table — the EventKit/Notification tools handle the EventKit side and stash ek_reminder_id
 //  via a follow-up update).
 //
 
@@ -54,7 +54,7 @@ struct CommitmentCreateResult: Codable, Equatable, Sendable {
 
 struct CommitmentCreateTool: LLMTool {
     let id: String = ToolID.commitmentCreate.rawValue
-    let description: String = "Create a commitment (a promised action). EventKit mirror is Pod D's job."
+    let description: String = "Create a commitment (a promised action). EventKit mirror is the EventKit gateway's job."
     let jsonSchemaForArgs: String = """
     {
       "type": "object",
@@ -122,7 +122,7 @@ struct CommitmentCreateTool: LLMTool {
             )
         }
 
-        // Track-D parity audit row + undo handle. Inverse DELETEs the row;
+        // Audit-log row + undo handle. Inverse DELETEs the row;
         // commitments are not append-only so deletion is safe.
         let action = TurnAction(
             turnID: TurnID.generate(),
@@ -395,7 +395,7 @@ struct CommitmentCompleteTool: LLMTool {
             return snapshot
         }
 
-        // Track-D parity audit row + undo handle. Inverse replays the
+        // Audit-log row + undo handle. Inverse replays the
         // captured prior status / due_at / completed_at.
         let action = TurnAction(
             turnID: TurnID.generate(),
@@ -501,7 +501,7 @@ struct CommitmentAbandonTool: LLMTool {
             return snapshot
         }
 
-        // Track-D parity audit row + undo handle (shared restore handler).
+        // Audit-log row + undo handle (shared restore handler).
         let action = TurnAction(
             turnID: TurnID.generate(),
             toolID: .commitmentAbandon,
@@ -609,7 +609,7 @@ struct CommitmentSnoozeTool: LLMTool {
             return snapshot
         }
 
-        // Track-D parity audit row + undo handle. Inverse restores prior
+        // Audit-log row + undo handle. Inverse restores prior
         // status AND due_at (snooze mutates both).
         let action = TurnAction(
             turnID: TurnID.generate(),

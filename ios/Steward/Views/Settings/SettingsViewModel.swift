@@ -1,6 +1,6 @@
 //
 //  SettingsViewModel.swift
-//  Steward — Track E
+//  Steward
 //
 //  Backing store for the Settings tab. Loads the typed `Settings` blob and
 //  the active domains. Mutations route back through `SettingsStore.shared`

@@ -22,7 +22,7 @@ struct StewardApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootTabView()
                 .environmentObject(bootstrap)
                 .task {
                     await bootstrap.start()
@@ -64,5 +64,11 @@ final class AppBootstrap: ObservableObject {
         // require the DB to function — it reads settings via SettingsStore
         // which surfaces a typed error if the DB is sick.
         await BGTaskCoordinator.shared.foregroundTick()
+        // Warm the agent loop singleton so the first chat send doesn't
+        // pay the registry-build latency. Fire-and-forget — UI gates on
+        // its own `try await AgentLoopHost.shared.ready()` before sending.
+        Task.detached {
+            _ = try? await AgentLoopHost.shared.ready()
+        }
     }
 }

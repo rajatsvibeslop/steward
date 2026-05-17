@@ -1,31 +1,43 @@
 //
-//  RootView.swift
-//  Steward
+//  RootTabView.swift
+//  Steward — Track E
 //
-//  Track A scaffold: empty TabView holding three scaffold tabs.
-//  Track E owns the real UI; this exists so the app launches and is navigable.
+//  Replaces Track A's RootView. Three tabs in fixed order — Chat, Today,
+//  Settings — per Designer §0 ("Default launch tab: Chat"). The selection
+//  binding is exposed so the Today empty-state and "+ Add a team via chat"
+//  Settings row can switch tabs programmatically.
 //
 
 import SwiftUI
 
-struct RootView: View {
+struct RootTabView: View {
     @EnvironmentObject private var bootstrap: AppBootstrap
 
+    enum Tab: Hashable { case chat, today, settings }
+
+    @State private var selectedTab: Tab = .chat
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ChatView()
                 .tabItem {
                     Label("Chat", systemImage: "bubble.left.and.bubble.right")
                 }
-            TodayView()
+                .tag(Tab.chat)
+
+            TodayView(selectedTab: $selectedTab)
                 .tabItem {
-                    Label("Today", systemImage: "sun.max")
+                    Label("Today", systemImage: "sun.horizon")
                 }
-            SettingsView()
+                .tag(Tab.today)
+
+            SettingsView(selectedTab: $selectedTab)
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape")
+                    Label("Settings", systemImage: "slider.horizontal.3")
                 }
+                .tag(Tab.settings)
         }
+        .tint(.accentColor)
         .overlay(alignment: .top) {
             BootstrapBanner(phase: bootstrap.phase)
         }
@@ -62,6 +74,6 @@ private struct BootstrapBanner: View {
 }
 
 #Preview {
-    RootView()
+    RootTabView()
         .environmentObject(AppBootstrap())
 }

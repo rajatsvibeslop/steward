@@ -93,8 +93,8 @@ actor DomainStore {
             try EventLog.append(
                 actor: EventActor.user,
                 kind: "domain_rename",
-                payloadJSON: "{\"new_display_name\":\"\(Self.escapeJSON(trimmed))\"}",
                 domain: domain,
+                payloadJSON: "{\"new_display_name\":\"\(Self.escapeJSON(trimmed))\"}",
                 source: "settings_ui",
                 in: db
             )

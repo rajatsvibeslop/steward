@@ -264,7 +264,7 @@ final class TodayViewModel: ObservableObject {
             }
             // Persist into events so the next load doesn't regen.
             let db = try await provider.database()
-            try await db.write { dbase in
+            _ = try await db.write { dbase in
                 try EventLog.append(
                     actor: EventActor.coordinator,
                     kind: "morning_brief",

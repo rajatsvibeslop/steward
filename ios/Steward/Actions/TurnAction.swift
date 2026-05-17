@@ -14,48 +14,197 @@
 //
 
 import Foundation
+import GRDB
 
 // MARK: - Identity types
+//
+// One canonical, strongly-typed struct per identifier. Each conforms to:
+//   - RawRepresentable & Hashable: opaque value semantics + dictionary keys
+//   - Codable: encodes as a plain JSON string (not a wrapped object)
+//   - ExpressibleByStringLiteral: ergonomic test fixtures and migrations
+//   - DatabaseValueConvertible (GRDB): direct bind/read against TEXT columns
+//   - CustomStringConvertible: log-friendly
+//   - `raw` alias: Pod B's earlier code paths used `.raw`; both work
+//
+// `static func generate()` returns a UUID-shaped ID. Tools that need a
+// lex-ordered ULID call `ULID.generate(now:)` and wrap with `init(rawValue:)`.
 
-/// ULID-shaped identifier. We don't depend on a ULID library — a 16-byte UUID
-/// rendered uppercase is enough for ordering by created_at; not lexicographic
-/// time-sort like a real ULID, but the events table indexes on created_at
-/// anyway. Pod B can swap in a real ULID generator later without touching
-/// callers.
-struct ActionID: Hashable, Codable, Sendable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
-    static func generate() -> ActionID {
+public struct ActionID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    /// Legacy alias — earlier Pod B code reads `id.raw`.
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public static func generate() -> ActionID {
         ActionID(rawValue: UUID().uuidString)
     }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
 }
 
-struct TurnID: Hashable, Codable, Sendable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
-    static func generate() -> TurnID {
+public struct TurnID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    /// Legacy alias — earlier Pod B code reads `id.raw`.
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public static func generate() -> TurnID {
         TurnID(rawValue: UUID().uuidString)
     }
-}
-
-struct EventID: Hashable, Codable, Sendable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
-    static func generate() -> EventID {
-        EventID(rawValue: UUID().uuidString)
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
     }
 }
 
-struct MemoryID: Hashable, Codable, Sendable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
+public struct EventID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public static func generate() -> EventID {
+        EventID(rawValue: UUID().uuidString)
+    }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
 }
 
-struct NotificationID: Hashable, Codable, Sendable, RawRepresentable {
-    let rawValue: String
-    init(rawValue: String) { self.rawValue = rawValue }
-    static func generate() -> NotificationID {
+public struct MemoryID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}
+
+public struct NotificationID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public static func generate() -> NotificationID {
         NotificationID(rawValue: UUID().uuidString)
+    }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}
+
+/// Stable instrument primary-key wrapper. Pod C's tools generate fresh
+/// IDs via `ULID.generate(now:)` and wrap them with `init(rawValue:)`.
+public struct InstrumentID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}
+
+/// Commitment primary key. Mirrors InstrumentID's contract.
+public struct CommitmentID: Hashable, Codable, Sendable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
+    public init(_ rawValue: String) { self.rawValue = rawValue }
+    public init(stringLiteral value: String) { self.rawValue = value }
+    public var raw: String { rawValue }
+    public var description: String { rawValue }
+    public init(from decoder: Decoder) throws {
+        self.rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
+    }
+}
+
+// MARK: - GRDB interop
+//
+// Each ID encodes as a TEXT column. We do not synthesize via
+// RawRepresentable's GRDB adapter (some versions of GRDB serialize
+// RawRepresentable through Codable) — explicit so behavior is identical
+// across GRDB minor releases.
+
+extension ActionID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> ActionID? {
+        String.fromDatabaseValue(dbValue).map { ActionID(rawValue: $0) }
+    }
+}
+extension TurnID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> TurnID? {
+        String.fromDatabaseValue(dbValue).map { TurnID(rawValue: $0) }
+    }
+}
+extension EventID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> EventID? {
+        String.fromDatabaseValue(dbValue).map { EventID(rawValue: $0) }
+    }
+}
+extension MemoryID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> MemoryID? {
+        String.fromDatabaseValue(dbValue).map { MemoryID(rawValue: $0) }
+    }
+}
+extension NotificationID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> NotificationID? {
+        String.fromDatabaseValue(dbValue).map { NotificationID(rawValue: $0) }
+    }
+}
+extension InstrumentID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> InstrumentID? {
+        String.fromDatabaseValue(dbValue).map { InstrumentID(rawValue: $0) }
+    }
+}
+extension CommitmentID: DatabaseValueConvertible {
+    public var databaseValue: DatabaseValue { rawValue.databaseValue }
+    public static func fromDatabaseValue(_ dbValue: DatabaseValue) -> CommitmentID? {
+        String.fromDatabaseValue(dbValue).map { CommitmentID(rawValue: $0) }
     }
 }
 

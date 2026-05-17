@@ -83,7 +83,7 @@ struct CommitmentCreateTool: LLMTool {
         let args = try ToolJSON.decode(CommitmentCreateArgs.self, from: argsJSON)
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
-        let id = ULID.generate(now: timestamp)
+        let id = CommitmentID(rawValue: ULID.generate(now: timestamp))
         let nowMs = Int64(timestamp.timeIntervalSince1970 * 1000)
         let dueMs: Int64? = args.dueAt.map { Int64($0.timeIntervalSince1970 * 1000) }
 

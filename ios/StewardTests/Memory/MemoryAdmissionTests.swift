@@ -37,7 +37,7 @@ final class MemoryAdmissionTests: XCTestCase {
     ) -> MemoryItem {
         let now = Date()
         return MemoryItem(
-            memoryID: id,
+            memoryID: MemoryID(rawValue: id),
             type: type,
             text: text,
             embedding: normalize(embedding),

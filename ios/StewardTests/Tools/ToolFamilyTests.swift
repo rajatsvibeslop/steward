@@ -46,7 +46,7 @@ final class ToolFamilyTests: XCTestCase {
         """
         let resultJSON = try await tool.invoke(argsJSON: args)
         let result = try ToolJSON.decode(EventCaptureResult.self, from: resultJSON)
-        XCTAssertFalse(result.eventID.isEmpty)
+        XCTAssertFalse(result.eventID.rawValue.isEmpty)
 
         let db = try await provider.database()
         let row = try await db.read { db -> Row? in
@@ -143,7 +143,7 @@ final class ToolFamilyTests: XCTestCase {
         """
         let cResultJSON = try await create.invoke(argsJSON: createArgs)
         let cResult = try ToolJSON.decode(CommitmentCreateResult.self, from: cResultJSON)
-        XCTAssertFalse(cResult.commitmentID.isEmpty)
+        XCTAssertFalse(cResult.commitmentID.rawValue.isEmpty)
 
         let complete = CommitmentCompleteTool(provider: provider, now: { self.fixedNow })
         let doneArgs = """

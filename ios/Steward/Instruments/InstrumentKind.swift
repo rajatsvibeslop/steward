@@ -15,14 +15,13 @@
 import Foundation
 
 // MARK: - Identifiers
-
-/// String-typed Ids. The DB stores them as TEXT; ULIDs are produced via
-/// `ULID.generate()` so cross-table foreign keys collate by insertion order.
-typealias InstrumentID = String
-typealias EventID      = String
-typealias MemoryID     = String
-typealias CommitmentID = String
-typealias NotificationID = String
+//
+// Canonical typed-ID structs live in `Actions/TurnAction.swift`
+// (`InstrumentID`, `EventID`, `MemoryID`, `CommitmentID`, `NotificationID`).
+// We deliberately removed the typealias-to-String declarations that used to
+// live here to avoid cross-pod duplicate declarations; the integration
+// patch resolves all collisions onto Pod D's strongly-typed structs so the
+// undo system can rely on type-safe inverse actions.
 
 // MARK: - Shared shapes
 

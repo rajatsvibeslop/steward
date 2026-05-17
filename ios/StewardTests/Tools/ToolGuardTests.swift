@@ -2,8 +2,10 @@
 //  ToolGuardTests.swift
 //  StewardTests
 //
-//  ToolScope + ToolGuard validation. The guard rewrites pinned args and
-//  rejects whitelist violations / disallowed tools.
+//  ToolScope + ToolGuard validation. The guard rejects out-of-scope tools
+//  and pinned-arg violations. Pod B's actual API takes pre-parsed
+//  `[String: AnyCodableScalar]` args (not a JSON string) and throws
+//  `ToolGuardError.toolOutOfScope` / `.argPinViolation`.
 //
 
 import XCTest
@@ -12,48 +14,62 @@ import XCTest
 final class ToolGuardTests: XCTestCase {
 
     func test_coordinatorScope_allowsEverything() throws {
-        let scope = ToolScope.coordinator
-        let rewritten = try ToolGuard.validate(
+        let scope = ToolScope.coordinatorAll
+        // event.capture is allowed under the coordinator scope; should
+        // validate without throwing.
+        try ToolGuard.validate(
             .eventCapture,
-            argsJSON: #"{"text":"hi","reasoning":"r","actor":"coordinator"}"#,
+            args: [
+                "text": .string("hi"),
+                "reasoning": .string("r"),
+                "actor": .string("coordinator")
+            ],
             scope: scope
         )
-        XCTAssertFalse(rewritten.isEmpty)
     }
 
-    func test_domainScope_pinsDomainArgWhenAbsent() throws {
+    func test_domainScope_pinsDomainArg_acceptsMatchingDomain() throws {
         let scope = ToolScope.domain("money")
-        let rewritten = try ToolGuard.validate(
+        try ToolGuard.validate(
             .eventCapture,
-            argsJSON: #"{"text":"spent","reasoning":"r","actor":"agent:money"}"#,
+            args: [
+                "text": .string("spent"),
+                "domain": .string("money"),
+                "reasoning": .string("r"),
+                "actor": .string("agent:money")
+            ],
             scope: scope
         )
-        XCTAssertTrue(rewritten.contains("\"domain\":\"money\""), "rewritten args should pin domain → got \(rewritten)")
     }
 
     func test_domainScope_rejectsConflictingDomain() {
         let scope = ToolScope.domain("money")
         XCTAssertThrowsError(try ToolGuard.validate(
             .eventCapture,
-            argsJSON: #"{"text":"spent","domain":"health","reasoning":"r","actor":"agent:money"}"#,
+            args: [
+                "text": .string("spent"),
+                "domain": .string("health"),
+                "reasoning": .string("r"),
+                "actor": .string("agent:money")
+            ],
             scope: scope
         )) { error in
-            guard case ToolGuardError.fixedArgConflict(let arg, _, _) = error else {
-                XCTFail("expected fixedArgConflict; got \(error)"); return
+            guard case ToolGuardError.argPinViolation(_, let arg, _) = error else {
+                XCTFail("expected argPinViolation; got \(error)"); return
             }
             XCTAssertEqual(arg, "domain")
         }
     }
 
     func test_disallowedTool_rejected() {
-        let scope = ToolScope.domain("money")  // does NOT allow mercy_mode.engage
+        let scope = ToolScope.domain("money")  // does NOT include mercyModeEngage
         XCTAssertThrowsError(try ToolGuard.validate(
             .mercyModeEngage,
-            argsJSON: "{}",
+            args: [:],
             scope: scope
         )) { error in
-            guard case ToolGuardError.toolNotAllowed = error else {
-                XCTFail("expected toolNotAllowed; got \(error)"); return
+            guard case ToolGuardError.toolOutOfScope = error else {
+                XCTFail("expected toolOutOfScope; got \(error)"); return
             }
         }
     }

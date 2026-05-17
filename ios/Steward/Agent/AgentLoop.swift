@@ -114,7 +114,7 @@ public actor AgentLoop {
     /// failures; returns a typed `CoordinatorResponse` for all in-band
     /// outcomes (including handoff-budget exhaustion).
     public func run(userMessage: String) async throws -> CoordinatorResponse {
-        let turnID = TurnID(raw: turnIDGen())
+        let turnID = TurnID(rawValue: turnIDGen())
         let now = clock()
         let activeDomains = await resolver.listActive()
 

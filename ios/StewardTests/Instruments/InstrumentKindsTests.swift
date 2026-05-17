@@ -22,7 +22,7 @@ final class InstrumentKindsTests: XCTestCase {
         notes: String? = nil
     ) -> InstrumentEvent<P> {
         InstrumentEvent(
-            eventID: ULID.generate(now: at),
+            eventID: EventID(rawValue: ULID.generate(now: at)),
             instrumentID: instrument,
             kind: kind,
             actor: actor,

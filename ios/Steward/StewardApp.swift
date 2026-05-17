@@ -41,6 +41,10 @@ final class AppBootstrap: ObservableObject {
     func start() async {
         guard phase == .idle else { return }
         phase = .opening
+        // Register all instrument kinds before any agent / view code can
+        // dispatch an instrument event. Addendum §1.2 says this happens at
+        // @main; the bootstrap object is the @main proxy.
+        InstrumentRegistry.bootstrapAll()
         do {
             _ = try await DatabaseProvider.shared.database()
             phase = .ready

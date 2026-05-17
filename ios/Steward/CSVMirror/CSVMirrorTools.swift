@@ -160,7 +160,7 @@ actor CSVMirrorTools {
     private func enqueue(operation: String, payloadJSON: String) async throws {
         let db = try await provider.database()
         let nowMS = Int64(now().timeIntervalSince1970 * 1000)
-        let queueID = ULIDFactory.make()
+        let queueID = ULID.generate(now: now())
         try await db.write { dbase in
             try dbase.execute(sql: """
                 INSERT INTO sync_queue (queue_id, target, operation, payload_json, enqueued_at, attempt_count)

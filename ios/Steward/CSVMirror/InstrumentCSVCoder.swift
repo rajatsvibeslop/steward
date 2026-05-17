@@ -2,98 +2,143 @@
 //  InstrumentCSVCoder.swift
 //  Steward — Track F
 //
-//  Bridging layer between Track C's `InstrumentKind` protocol (addendum §1.2)
-//  and the CSV mirror in Track F. Per-kind static `renderCSV`, `parseCSVOverride`,
-//  `renderStateCSV`, and `initialDataColumns` are wrapped in a `Coder` value and
-//  registered by kind id; the watcher dispatches every operation through the
-//  registry so there is no string-keyed `if snap.kind == ...` branch anywhere
-//  in production code (hard reject #9).
+//  Adapter that lifts Pod C's `InstrumentKind` (addendum §1.2) into the
+//  closure-based coder Track F's `CSVMirrorWatcher` actually dispatches on.
 //
-//  Track C-owned concrete coders live under `Steward/Instruments/` once that
-//  pod lands. Until then a stub lives under `CSVMirror/_Stubs/` — see
-//  `_Stubs/StubRunningAccumulatorCoder.swift`. Track F production code never
-//  imports the stub by type; it only registers it at boot under a marker that
-//  Integration deletes when Pod C merges.
+//  Two pieces:
+//   1. `InstrumentCSVCoder` — Sendable value type holding closures the watcher
+//      calls. Pre-merge this was a parallel adapter; post-merge it bridges
+//      Pod C's protocol surface (`K.renderCSV`, `K.parseCSVOverride`) plus a
+//      generic state.csv renderer that walks the state JSON.
+//   2. `InstrumentCSVCoderRegistry` — actor map `kindID -> InstrumentCSVCoder`.
+//      `TrackFBootstrap.registerKindCoders()` registers all 7 of Pod C's
+//      kinds; `CSVMirrorWatcher` looks up by `instruments.kind`.
+//
+//  Hard reject #9 still holds: no `switch kindID { ... }` anywhere; every
+//  dispatch goes through the registry.
 //
 
 import Foundation
 
-/// Diff result for one cell, emitted as a `manual_correction` event payload
-/// (addendum §1.4 step 3). On-disk shape uses snake_case so Pod B reading
-/// `payload_json` sees the column names spec calls out (`row_id`, `cell_name`,
-/// `old_value`, `new_value`, `original_event_id`).
-struct ManualCorrection: Codable, Sendable, Equatable {
-    let rowID: String
-    let cellName: String
-    /// Most recent prior value Steward wrote for this `(row_id, cell_name)`,
-    /// resolved at emit time from the `events` table. `nil` when there is no
-    /// prior — i.e. the row was added by Steward and the user is the first to
-    /// edit this cell.
-    let oldValue: String?
-    let newValue: String
-    /// `event_id` of the manual_correction / log_entry / instrument_update that
-    /// last wrote this cell. `nil` when no prior write exists.
-    let originalEventID: String?
-    /// Set when this correction came from a conflict-resolution merge across
-    /// NSFileVersions; surfaces the row to the user in the chat next-turn
-    /// context. Per addendum §1.4 step 1.
-    var requiresUserAttention: Bool = false
-
-    enum CodingKeys: String, CodingKey {
-        case rowID = "row_id"
-        case cellName = "cell_name"
-        case oldValue = "old_value"
-        case newValue = "new_value"
-        case originalEventID = "original_event_id"
-        case requiresUserAttention = "requires_user_attention"
-    }
-}
-
-/// New row from the CSV that has no matching `__row_id` in the events table.
-/// Emitted as `log_entry` events with `source='sheets_edit'` per §1.4 step 4.
-struct ManualLogEntry: Codable, Sendable, Equatable {
-    let assignedRowID: String
-    let cells: [String: String]
-
-    enum CodingKeys: String, CodingKey {
-        case assignedRowID = "assigned_row_id"
-        case cells
-    }
-}
-
-/// The full set of operations a kind must provide so Track F can render and
-/// reconcile its CSV. Track C's `InstrumentKind` static funcs map 1:1 onto
-/// these closures via `InstrumentCSVCoder(kind:)` once their protocol lands.
+/// Operations the CSV mirror needs per kind. Track C's `InstrumentKind`
+/// static funcs map onto these closures via `InstrumentCSVCoder.init(kind:)`.
 struct InstrumentCSVCoder: Sendable {
-    /// Render the current state + recent events into the editable data.csv
-    /// table. The table MUST include the reserved columns (`__row_id`,
-    /// `__steward_version`, `__last_synced_at`) so reconciliation can diff
-    /// cell-by-cell. `recentEventsJSON` is each event's `payload_json` blob.
-    let renderData: @Sendable (_ stateJSON: String, _ definitionJSON: String, _ recentEventsJSON: [String]) throws -> CSVTable
+    /// Render the canonical editable table for an instrument. Mirrors
+    /// `K.renderCSV(state:definition:recentEvents:)`.
+    let renderData: @Sendable (
+        _ stateJSON: String,
+        _ definitionJSON: String,
+        _ recentEventsJSON: [String]
+    ) throws -> CSVTable
 
-    /// Render the write-only state.csv snapshot from instrument state.
-    let renderState: @Sendable (_ stateJSON: String, _ definitionJSON: String) throws -> CSVTable
+    /// Render the write-only `state.csv` snapshot. Pod C's `InstrumentKind`
+    /// doesn't expose a per-kind state renderer in v1, so this defaults to a
+    /// generic "field, value" walk over the state JSON's top-level keys —
+    /// kind-agnostic and useful for "what does Steward think my state is".
+    let renderState: @Sendable (
+        _ stateJSON: String,
+        _ definitionJSON: String
+    ) throws -> CSVTable
 
-    /// Columns for the initial empty data.csv (before any events exist).
-    /// Reserved columns must appear in this list.
-    let initialDataColumns: [String]
-
-    /// Compute corrections + new entries from a user-edited table. Returns
-    /// what changed; caller (`CSVMirrorWatcher`) owns event emission, state
-    /// update, and `old_value` / `original_event_id` resolution against the
-    /// `events` table.
-    let parseOverride: @Sendable (_ table: CSVTable, _ currentStateJSON: String, _ definitionJSON: String) throws -> CSVOverrideResult
+    /// Compute corrections from a user-edited table. Mirrors
+    /// `K.parseCSVOverride(_:current:definition:)`. Returns Pod C's typed
+    /// `ManualCorrection`s; the watcher emits each as a `manual_correction`
+    /// event and folds it back into state via `InstrumentRegistry.applyCorrection`.
+    let parseOverride: @Sendable (
+        _ table: CSVTable,
+        _ currentStateJSON: String,
+        _ definitionJSON: String
+    ) throws -> [ManualCorrection]
 }
 
-struct CSVOverrideResult: Sendable, Equatable {
-    var corrections: [ManualCorrection]
-    var newEntries: [ManualLogEntry]
+// MARK: - Bridging init: InstrumentKind → InstrumentCSVCoder
+
+extension InstrumentCSVCoder {
+    /// Lift a concrete `InstrumentKind` conformance into the closure-based
+    /// coder. Decodes/encodes the kind's typed `State`, `Definition`, and
+    /// `EventPayload` at the JSON-string boundary so the watcher stays
+    /// type-erased while internals are fully typed.
+    init<K: InstrumentKind>(kind: K.Type) {
+        self.init(
+            renderData: { stateJSON, definitionJSON, recentEventsJSON in
+                let state = try Self.decode(K.State.self, from: stateJSON)
+                let def = try Self.decode(K.Definition.self, from: definitionJSON)
+                let events = try recentEventsJSON.map {
+                    try Self.decode(InstrumentEvent<K.EventPayload>.self, from: $0)
+                }
+                return K.renderCSV(state: state, definition: def, recentEvents: events)
+            },
+            renderState: { stateJSON, _ in
+                // Generic state-blob walk — independent of kind. We try to
+                // decode the JSON as a top-level dictionary and emit one
+                // `(field, value)` row per key. If the state isn't a top-level
+                // object we fall back to a single-row "state" cell containing
+                // the raw JSON.
+                let header = ["field", "value"]
+                guard let data = stateJSON.data(using: .utf8),
+                      let parsed = try? JSONSerialization.jsonObject(with: data) else {
+                    return CSVTable(header: header, rows: [["state", stateJSON]])
+                }
+                guard let dict = parsed as? [String: Any] else {
+                    return CSVTable(header: header, rows: [["state", stateJSON]])
+                }
+                let rows = dict.keys.sorted().map { key -> [String] in
+                    let value = dict[key]
+                    return [key, Self.renderJSONValue(value)]
+                }
+                return CSVTable(header: header, rows: rows)
+            },
+            parseOverride: { table, stateJSON, definitionJSON in
+                let state = try Self.decode(K.State.self, from: stateJSON)
+                let def = try Self.decode(K.Definition.self, from: definitionJSON)
+                return try K.parseCSVOverride(table, current: state, definition: def)
+            }
+        )
+    }
+
+    // MARK: - Helpers
+
+    private static func decode<T: Decodable>(_ type: T.Type, from json: String) throws -> T {
+        guard let data = json.data(using: .utf8) else {
+            throw CSVTableError.fileReadFailed(
+                URL(fileURLWithPath: "/dev/null"),
+                underlying: NSError(domain: "Steward.InstrumentCSVCoder", code: 1,
+                                    userInfo: [NSLocalizedDescriptionKey: "non-UTF8 JSON"])
+            )
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(T.self, from: data)
+    }
+
+    /// Render a top-level JSON value for state.csv. Strings unwrap; numbers
+    /// stringify; arrays/objects re-serialize compactly.
+    private static func renderJSONValue(_ any: Any?) -> String {
+        guard let any else { return "" }
+        if let s = any as? String { return s }
+        if let n = any as? NSNumber {
+            // NSNumber may bridge to Bool — distinguish since CFNumberGetType
+            // would let `true`/`false` print as `1`/`0` and lose intent.
+            if CFGetTypeID(n) == CFBooleanGetTypeID() {
+                return n.boolValue ? "true" : "false"
+            }
+            return n.stringValue
+        }
+        if any is NSNull { return "" }
+        if let data = try? JSONSerialization.data(withJSONObject: any, options: []),
+           let s = String(data: data, encoding: .utf8) {
+            return s
+        }
+        return String(describing: any)
+    }
 }
 
-/// Process-wide registry mapping `instruments.kind` strings to a coder. Track
-/// C's `@main` boot calls `register(kindID:coder:)` for each of the 7 built-in
-/// kinds; Track F's `CSVMirrorWatcher` looks them up by the row's `kind`
-/// column.
+// MARK: - Registry
+
+/// Process-wide registry mapping `instruments.kind` strings to a coder.
+/// `TrackFBootstrap.registerKindCoders()` calls `register` for each of Pod C's
+/// 7 built-in kinds at app boot; the watcher looks them up by the row's
+/// `kind` column.
 actor InstrumentCSVCoderRegistry {
     static let shared = InstrumentCSVCoderRegistry()
 
@@ -107,8 +152,7 @@ actor InstrumentCSVCoderRegistry {
         coders[kindID]
     }
 
-    /// Test seam — wipes registrations between unit tests. Tests register
-    /// stub coders per test.
+    /// Test seam — wipes registrations between unit tests.
     func reset() {
         coders.removeAll()
     }

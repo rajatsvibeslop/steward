@@ -75,7 +75,7 @@ actor NetworkObserver {
     /// a token for `unsubscribe(token:)`.
     @discardableResult
     func subscribe(_ callback: @escaping @Sendable (NetworkReachability) async -> Void) -> String {
-        let token = ULIDFactory.make()
+        let token = ULID.generate()
         subscribers[token] = callback
         let snapshot = current
         Task { await callback(snapshot) }

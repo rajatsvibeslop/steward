@@ -1,0 +1,28 @@
+# Claude Code local state (sessions, worktrees, agents, hooks)
+.claude/
+
+# Xcode build artifacts
+ios/build/
+ios/DerivedData/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs and temp
+*.log
+*.tmp
+.tmp/
+
+# Local Steward runtime data (the user's actual SQLite DB and embeddings)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

@@ -56,7 +56,10 @@ final class CSVMirrorTests: XCTestCase {
         domain: String = "health",
         name: String = "movement_minutes",
         definition: String = #"{"unit":"min","daily_target":30,"capture_prompt":"how many minutes?"}"#,
-        state: String = #"{"today_total":0,"seven_day_avg":0,"thirty_day_avg":0,"last_event_at":null}"#
+        // Matches Pod C's `RunningAccumulator.State` shape — includes
+        // `window_events` so JSONDecoder.decode succeeds in the renderCSV
+        // bridge. Generated via `RunningAccumulator.initialState(definition:now:)`.
+        state: String = #"{"window_events":[],"today_total":0,"seven_day_avg":0,"thirty_day_avg":0,"last_event_at":null}"#
     ) async throws {
         let db = try await provider.database()
         try await db.write { dbase in

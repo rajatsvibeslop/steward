@@ -362,17 +362,29 @@ public actor NotificationCancelTool: LLMTool {
             throw ToolError(kind: .argumentsInvalid, message: "argsJSON not parseable")
         }
 
-        // Resolve to a concrete UN identifier (or set of identifiers).
+        // Resolve to a concrete UN identifier (or set of identifiers). If the
+        // arg matches a NotificationKind, this is "cancel everything of this
+        // kind" — that flips both pending occurrences AND any active
+        // recurring rules of the same kind (so the rule stops re-issuing).
         let upcomingAll = await scheduler.upcoming(domain: nil)
         let targets: [ScheduledNotification]
+        let isKindWide: Bool
         if let kind = NotificationKind(rawValue: args.notificationIDOrKind) {
             targets = upcomingAll.filter { $0.request.kind == kind }
+            isKindWide = true
+            await scheduler.cancelKind(kind)
         } else {
             targets = upcomingAll.filter { $0.unRequestIdentifier == args.notificationIDOrKind }
+            isKindWide = false
         }
         var cancelledIDs: [String] = []
         for t in targets {
-            await scheduler.cancel(id: t.unRequestIdentifier)
+            if !isKindWide {
+                // For kind-wide cancellation, cancelKind already removed the
+                // pending notifications; we skip the per-id call to avoid
+                // double-counting.
+                await scheduler.cancel(id: NotificationID(rawValue: t.unRequestIdentifier))
+            }
             cancelledIDs.append(t.unRequestIdentifier)
 
             // Inverse is the original request (rescheduleNotification).

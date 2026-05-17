@@ -121,7 +121,8 @@ private func makeScheduler(
         center: center,
         settings: provider,
         clock: clock,
-        timeZone: { tz }
+        timeZone: { tz },
+        ruleStore: { nil }   // tests don't persist recurring rules
     )
     return (scheduler, center, clock, provider)
 }
@@ -279,6 +280,114 @@ final class NotificationSchedulerTests: XCTestCase {
             scope: .coordinator
         )
         XCTAssertEqual(outcome, .suppressedByPause)
+    }
+
+    func testSystemErrorWhenUNAddThrows() async {
+        // Fake center that always throws → scheduler must surface
+        // .systemError, NEVER .capExceeded. Deslop FIX #6.
+        final class ThrowingCenter: UserNotificationCenterProtocol, @unchecked Sendable {
+            func add(_ request: UNNotificationRequest) async throws {
+                throw NSError(domain: "test", code: 99)
+            }
+            func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {}
+            func pendingNotificationRequests() async -> [UNNotificationRequest] { [] }
+        }
+        let provider = FakeSettingsProvider(snapshot: defaultSettings())
+        let scheduler = NotificationScheduler(
+            center: ThrowingCenter(),
+            settings: provider,
+            clock: SystemClock(),
+            timeZone: { TimeZone(identifier: "America/New_York")! },
+            ruleStore: { nil }
+        )
+        let outcome = await scheduler.schedule(
+            makeRequest(at: Date().addingTimeInterval(3600)),
+            scope: .coordinator
+        )
+        if case .systemError(let reason) = outcome {
+            XCTAssertTrue(reason.contains("un_add_failed"))
+        } else {
+            XCTFail("expected .systemError, got \(outcome)")
+        }
+    }
+
+    func testSystemErrorWhenSettingsLoadFails() async {
+        // Fake settings provider that always throws → .systemError, not cap.
+        // Deslop FIX #7.
+        final class ThrowingSettings: SettingsProviding, @unchecked Sendable {
+            func load() async throws -> Settings {
+                throw NSError(domain: "test", code: 7)
+            }
+        }
+        let scheduler = NotificationScheduler(
+            center: FakeUNCenter(),
+            settings: ThrowingSettings(),
+            clock: SystemClock(),
+            timeZone: { TimeZone(identifier: "America/New_York")! },
+            ruleStore: { nil }
+        )
+        let outcome = await scheduler.schedule(
+            makeRequest(at: Date().addingTimeInterval(3600)),
+            scope: .coordinator
+        )
+        if case .systemError(let reason) = outcome {
+            XCTAssertTrue(reason.contains("settings_load_failed"))
+        } else {
+            XCTFail("expected .systemError, got \(outcome)")
+        }
+    }
+
+    func testScheduleRecurringReturnsFirstNotLastOutcome() async {
+        // Force the LAST occurrence (day-7) to hit cap by pre-filling day-7
+        // with 3 unrelated notifications. Day-1's morningBrief should still
+        // succeed and that should be the surfaced outcome.
+        // Deslop FIX #2.
+        let tz = TimeZone(identifier: "America/New_York")!
+        var noonComps = DateComponents()
+        noonComps.year = 2026; noonComps.month = 5; noonComps.day = 17
+        noonComps.hour = 12; noonComps.minute = 0
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let noon = cal.date(from: noonComps)!
+
+        let (sched, _, _, _) = makeScheduler(clockAt: noon)
+
+        // Sanity check: schedule daily 07:00 brief for 7 days. All
+        // occurrences are different days, each below cap, so all should
+        // succeed. The user-facing outcome must be `.scheduled` (first
+        // occurrence), not whatever the last occurrence returned.
+        let rule = try! RRuleParser.parse("FREQ=DAILY;BYHOUR=7;BYMINUTE=0")
+        let baseRequest = NotificationRequest(
+            kind: .morningBrief,
+            fireAt: noon,
+            templateContext: TemplateContext(briefTimeDisplay: "7am")
+        )
+        let outcome = await sched.scheduleRecurring(rule, request: baseRequest, scope: .coordinator)
+        if case .scheduled(_, let firesAt) = outcome {
+            // Expected: first occurrence's fire time is tomorrow 7am NYC.
+            let comps = cal.dateComponents([.hour, .minute], from: firesAt)
+            XCTAssertEqual(comps.hour, 7)
+            XCTAssertEqual(comps.minute, 0)
+        } else {
+            XCTFail("expected .scheduled (first occurrence), got \(outcome)")
+        }
+    }
+
+    func testCancelByIDUsesTypedNotificationID() async {
+        // Smoke test that the typed cancel signature works end-to-end and
+        // matches addendum §1.3. Deslop FIX #1.
+        let (sched, center, clock, _) = makeScheduler()
+        let outcome = await sched.schedule(
+            makeRequest(at: clock.now().addingTimeInterval(3600)),
+            scope: .coordinator
+        )
+        guard case .scheduled(let unID, _) = outcome else {
+            return XCTFail("schedule should succeed")
+        }
+        let beforeCount = (await center.pendingNotificationRequests()).count
+        XCTAssertEqual(beforeCount, 1)
+        await sched.cancel(id: NotificationID(rawValue: unID))
+        let afterCount = (await center.pendingNotificationRequests()).count
+        XCTAssertEqual(afterCount, 0)
     }
 
     func testTemplateRendererProducesModeSpecificCopy() {

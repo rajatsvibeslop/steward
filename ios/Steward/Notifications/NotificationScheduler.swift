@@ -27,6 +27,25 @@ public struct ScheduledNotification: Sendable, Equatable {
     public let firesAt: Date
     public let unRequestIdentifier: String
     public let mode: NotificationMode
+    /// Set when this occurrence came from a recurring rule. topUpHorizon
+    /// uses it to dedup re-expansions; cancel-by-id leaves the rule active.
+    public let ruleID: String?
+
+    public init(
+        notificationID: NotificationID,
+        request: NotificationRequest,
+        firesAt: Date,
+        unRequestIdentifier: String,
+        mode: NotificationMode,
+        ruleID: String? = nil
+    ) {
+        self.notificationID = notificationID
+        self.request = request
+        self.firesAt = firesAt
+        self.unRequestIdentifier = unRequestIdentifier
+        self.mode = mode
+        self.ruleID = ruleID
+    }
 }
 
 public enum ScheduleOutcome: Sendable, Equatable {
@@ -34,6 +53,10 @@ public enum ScheduleOutcome: Sendable, Equatable {
     case capExceeded(reason: CapReason, nextAvailableSlot: Date?)
     case suppressedByQuietHours(rescheduledTo: Date?)
     case suppressedByPause
+    /// Non-cap failure: UN.add threw, SettingsStore couldn't load, etc.
+    /// Distinct outcome so the LLM (and audit log) doesn't misread a system
+    /// error as a cap rejection — addendum §1.3 + deslop FIX #6/#7.
+    case systemError(reason: String)
 }
 
 public enum CapReason: Sendable, Equatable {
@@ -75,6 +98,7 @@ public actor NotificationScheduler {
     private let settings: SettingsProviding
     private let clock: ClockProviding
     private let timeZoneProvider: @Sendable () -> TimeZone
+    private let ruleStoreProvider: @Sendable () -> RecurringRuleStore?
 
     /// In-memory log of notifications we've scheduled, for cap math. Survives
     /// only while the process is alive; foreground tick + topUpHorizon re-
@@ -85,24 +109,35 @@ public actor NotificationScheduler {
         center: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
         settings: SettingsProviding = LiveSettingsProvider(),
         clock: ClockProviding = SystemClock(),
-        timeZone: @escaping @Sendable () -> TimeZone = { TimeZone.autoupdatingCurrent }
+        timeZone: @escaping @Sendable () -> TimeZone = { TimeZone.autoupdatingCurrent },
+        ruleStore: @escaping @Sendable () -> RecurringRuleStore? = { RecurringRuleStore.shared }
     ) {
         self.center = center
         self.settings = settings
         self.clock = clock
         self.timeZoneProvider = timeZone
+        self.ruleStoreProvider = ruleStore
     }
 
     // MARK: - Public API
 
     public func schedule(_ req: NotificationRequest, scope: AgentScope) async -> ScheduleOutcome {
+        await scheduleInternal(req, scope: scope, ruleID: nil)
+    }
+
+    private func scheduleInternal(
+        _ req: NotificationRequest,
+        scope: AgentScope,
+        ruleID: String?
+    ) async -> ScheduleOutcome {
         let settingsSnapshot: Settings
         do {
             settingsSnapshot = try await settings.load()
         } catch {
-            // Without settings we have no way to evaluate caps safely; fail
-            // closed and surface a structured outcome rather than crash.
-            return .capExceeded(reason: .dailyMax(currentCount: 0, max: 0), nextAvailableSlot: nil)
+            // Distinct from capExceeded — calling code must not interpret a
+            // settings outage as "user is over their daily limit". Deslop
+            // FIX #7 / addendum §1.3.
+            return .systemError(reason: "settings_load_failed: \(error)")
         }
         let now = clock.now()
         let mode = currentMode(in: settingsSnapshot, now: now)
@@ -191,7 +226,10 @@ public actor NotificationScheduler {
         do {
             try await center.add(unRequest)
         } catch {
-            return .capExceeded(reason: .dailyMax(currentCount: 0, max: 0), nextAvailableSlot: nil)
+            // Distinct from capExceeded — UN failure (system error,
+            // notification permission revoked mid-session, etc.) must not
+            // be masked as a cap rejection. Deslop FIX #6.
+            return .systemError(reason: "un_add_failed: \(error)")
         }
 
         scheduled.append(ScheduledNotification(
@@ -199,7 +237,8 @@ public actor NotificationScheduler {
             request: req,
             firesAt: req.fireAt,
             unRequestIdentifier: unRequestID,
-            mode: mode
+            mode: mode,
+            ruleID: ruleID
         ))
         return .scheduled(notificationID: unRequestID, firesAt: req.fireAt)
     }
@@ -207,12 +246,14 @@ public actor NotificationScheduler {
     public func scheduleRecurring(
         _ rule: RRuleSubset,
         request: NotificationRequest,
-        scope: AgentScope
+        scope: AgentScope,
+        rrule: String? = nil
     ) async -> ScheduleOutcome {
         // Recurring rules are pre-expanded into the next 7 days of concrete
-        // fire dates and scheduled through `schedule(_:scope:)` so cap math
-        // still applies per spec §10. Pure UN repeating triggers can't tell
-        // us "skip this occurrence because it hits the cap", so we expand.
+        // fire dates and scheduled through `scheduleInternal(_:scope:ruleID:)`
+        // so cap math still applies per spec §10. Pure UN repeating triggers
+        // can't tell us "skip this occurrence because it hits the cap", so
+        // we expand.
         let now = clock.now()
         let occurrences = RecurringExpander.nextOccurrences(
             rule: rule,
@@ -220,27 +261,83 @@ public actor NotificationScheduler {
             daysAhead: 7,
             timeZone: timeZoneProvider()
         )
-        guard let first = occurrences.first else {
-            return .capExceeded(reason: .dailyMax(currentCount: 0, max: 0), nextAvailableSlot: nil)
+        guard !occurrences.isEmpty else {
+            return .systemError(reason: "no_occurrences_in_horizon")
         }
-        var lastOutcome: ScheduleOutcome = .scheduled(notificationID: "", firesAt: first)
+
+        // Persist the rule so `topUpHorizon` can re-expand it on every
+        // foreground tick. The RRULE string is the source of truth — if we
+        // got a parsed RRuleSubset without an original string, reconstruct
+        // a canonical one from the subset.
+        let canonicalRRule = rrule ?? canonicalize(rule)
+        let templateContextJSON = encodeContext(request.templateContext)
+        let scopeActor: String = {
+            switch scope {
+            case .coordinator: return "coordinator"
+            case .domain(let d): return "agent:\(d)"
+            }
+        }()
+        let record = RecurringRuleRecord(
+            rrule: canonicalRRule,
+            kind: request.kind,
+            domain: request.domain,
+            instrumentID: request.instrumentID,
+            templateContextJSON: templateContextJSON,
+            actionContextJSON: request.actionContextJSON,
+            priority: request.priority,
+            scopeActor: scopeActor,
+            createdAt: now
+        )
+        let persistedRuleID: String?
+        if let store = ruleStoreProvider() {
+            do {
+                _ = try await store.insert(record)
+                persistedRuleID = record.ruleID
+            } catch {
+                // Rule persistence failure isn't fatal — we can still
+                // schedule the next 7 days; subsequent top-ups just won't
+                // re-issue beyond that horizon. Surface as system error so
+                // the audit log sees the truth.
+                return .systemError(reason: "rule_persist_failed: \(error)")
+            }
+        } else {
+            persistedRuleID = nil
+        }
+
+        // FIX #2: track FIRST outcome (what the agent sees), not the last
+        // loop value. Day-1-succeeds + day-7-caps must NOT report cap.
+        var firstOutcome: ScheduleOutcome?
         for occ in occurrences {
             var occRequest = request
             occRequest.fireAt = occ
-            let outcome = await schedule(occRequest, scope: scope)
-            lastOutcome = outcome
-            // If a single occurrence is capped, keep going — later days may
-            // pass. We surface only the FIRST outcome for tools (since that's
-            // the user-visible one); later ones go into the audit log via
-            // the caller.
-            if case .scheduled = outcome, occ == first { lastOutcome = outcome }
+            let outcome = await scheduleInternal(occRequest, scope: scope, ruleID: persistedRuleID)
+            if firstOutcome == nil { firstOutcome = outcome }
+            // Continue scheduling subsequent occurrences regardless of this
+            // one's outcome — a later day might fit even if today doesn't.
         }
-        return lastOutcome
+        return firstOutcome ?? .systemError(reason: "no_occurrences_scheduled")
     }
 
-    public func cancel(id: String) async {
-        center.removePendingNotificationRequests(withIdentifiers: [id])
-        scheduled.removeAll { $0.unRequestIdentifier == id }
+    /// Cancel a single scheduled occurrence by NotificationID (the typed wrapper
+    /// from §1.3, not a bare String — deslop FIX #1).
+    public func cancel(id: NotificationID) async {
+        let raw = id.rawValue
+        center.removePendingNotificationRequests(withIdentifiers: [raw])
+        scheduled.removeAll { $0.unRequestIdentifier == raw }
+    }
+
+    /// Cancel every active recurring rule of a given kind AND its pending
+    /// scheduled occurrences. Used by `notification.cancel(kind)`.
+    public func cancelKind(_ kind: NotificationKind) async {
+        let toCancel = scheduled.filter { $0.request.kind == kind }
+        let ids = toCancel.map(\.unRequestIdentifier)
+        if !ids.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+            scheduled.removeAll { $0.request.kind == kind }
+        }
+        if let store = ruleStoreProvider() {
+            _ = try? await store.cancelAll(kind: kind)
+        }
     }
 
     public func upcoming(domain: String?) async -> [ScheduledNotification] {
@@ -250,18 +347,103 @@ public actor NotificationScheduler {
 
     /// Top up the next `daysAhead` days of recurring rules. Called on every
     /// foreground tick (and from BGAppRefreshTask). BGTasks are unreliable in
-    /// install week, so this proactive refresh is the correctness guarantor.
+    /// install week, so this proactive refresh is THE correctness guarantor
+    /// for the cron-via-notification design — without it the morning brief
+    /// silently dies after 7 days (deslop FIX #3, addendum §1.3).
+    ///
+    /// Flow:
+    /// 1. Reconcile in-memory `scheduled` against UN pending (cap math
+    ///    truth-up; iOS may drop requests on system reload).
+    /// 2. Load every active rule from `notification_recurring_rules`.
+    /// 3. For each rule, expand the next `daysAhead` occurrences and
+    ///    schedule any whose fireAt isn't already pending. Cap math runs
+    ///    per occurrence; rule remains active even if an individual
+    ///    occurrence is cap-blocked.
     public func topUpHorizon(daysAhead: Int = 7) async {
-        // Reconcile in-memory `scheduled` with what UN actually has pending.
-        // If iOS dropped a request (eg. due to system reload), the source of
-        // truth is UN; if WE think we have one that UN doesn't, drop it.
+        // 1. UN reconciliation
         let pending = await center.pendingNotificationRequests()
         let pendingIDs = Set(pending.map(\.identifier))
         scheduled.removeAll { !pendingIDs.contains($0.unRequestIdentifier) }
-        // Future work: re-issue recurring rules whose horizon has shrunk
-        // below `daysAhead`. v1 leans on caller-tracked recurring state in
-        // notifications table; this method is a placeholder reconciliation
-        // hook that keeps cap math honest.
+
+        // 2. Load active rules
+        guard let store = ruleStoreProvider() else { return }
+        let rules: [RecurringRuleRecord]
+        do {
+            rules = try await store.loadActive()
+        } catch {
+            #if DEBUG
+            print("topUpHorizon: rule load failed:", error)
+            #endif
+            return
+        }
+        if rules.isEmpty { return }
+
+        // 3. Re-expand each rule. Skip occurrences whose fireAt+ruleID is
+        //    already in `scheduled` so we don't double-book.
+        let now = clock.now()
+        let tz = timeZoneProvider()
+        for record in rules {
+            guard let parsed = try? RRuleParser.parse(record.rrule) else { continue }
+            let occurrences = RecurringExpander.nextOccurrences(
+                rule: parsed,
+                startingAt: now,
+                daysAhead: daysAhead,
+                timeZone: tz
+            )
+            for occ in occurrences {
+                let alreadyScheduled = scheduled.contains {
+                    $0.ruleID == record.ruleID &&
+                        abs($0.firesAt.timeIntervalSince(occ)) < 60   // same minute
+                }
+                if alreadyScheduled { continue }
+
+                let context = decodeContext(record.templateContextJSON)
+                let scope: AgentScope = record.scopeActor.hasPrefix("agent:")
+                    ? .domain(String(record.scopeActor.dropFirst("agent:".count)))
+                    : .coordinator
+                let request = NotificationRequest(
+                    kind: record.kind,
+                    domain: record.domain,
+                    instrumentID: record.instrumentID,
+                    fireAt: occ,
+                    templateContext: context,
+                    actionContextJSON: record.actionContextJSON,
+                    priority: record.priority
+                )
+                _ = await scheduleInternal(request, scope: scope, ruleID: record.ruleID)
+            }
+        }
+    }
+
+    // MARK: - context (de)serialization
+
+    private func encodeContext(_ ctx: TemplateContext) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        guard let data = try? enc.encode(ctx),
+              let json = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return json
+    }
+
+    private func decodeContext(_ json: String) -> TemplateContext {
+        guard let data = json.data(using: .utf8),
+              let parsed = try? JSONDecoder().decode(TemplateContext.self, from: data)
+        else { return TemplateContext() }
+        return parsed
+    }
+
+    /// Reconstruct a canonical RRULE string from the parsed subset. Used when
+    /// the caller passed an RRuleSubset directly (not a string).
+    private func canonicalize(_ rule: RRuleSubset) -> String {
+        var parts: [String] = ["FREQ=\(rule.frequency.rawValue)"]
+        if !rule.byDay.isEmpty {
+            parts.append("BYDAY=\(rule.byDay.map(\.rawValue).joined(separator: ","))")
+        }
+        parts.append("BYHOUR=\(rule.byHour)")
+        parts.append("BYMINUTE=\(rule.byMinute)")
+        return parts.joined(separator: ";")
     }
 
     // MARK: - DEBUG hooks

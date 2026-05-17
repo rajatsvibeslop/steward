@@ -155,7 +155,7 @@ public actor UndoExecutor {
             _ = await scheduler.schedule(request, scope: .coordinator)
 
         case .cancelNotification(let notificationID):
-            await scheduler.cancel(id: notificationID)
+            await scheduler.cancel(id: NotificationID(rawValue: notificationID))
 
         // ---- Cross-pod cases (Track C owns the real handlers) ----
         //

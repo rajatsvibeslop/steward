@@ -200,6 +200,71 @@ actor UndoExecutor {
             // `archived_at IS NULL`, so the model stops surfacing it. Row
             // is preserved (no DELETE) so any provenance references survive.
             try await setMemoryArchived(memoryID: memoryID, archived: true)
+
+        // ---- Pod C v1.1 patch: remaining 8-tool undo coverage ----
+        //
+        // Same pattern as the 5 above: single `db.write { }`, assert affected
+        // rows so no silent no-op, emit a `manual_correction` audit row.
+
+        case .archiveInstrument(let instrumentID):
+            // Undo of `instrument.create` — flip archived_at so the row is
+            // hidden from the agent surface. Row is preserved (no DELETE)
+            // because event_log rows reference instrument_id.
+            try await updateInstrumentArchivedAt(
+                instrumentID: instrumentID,
+                archivedAt: Date()
+            )
+
+        case .unarchiveInstrument(let instrumentID):
+            // Undo of `instrument.archive` — clear archived_at.
+            try await updateInstrumentArchivedAt(
+                instrumentID: instrumentID,
+                archivedAt: nil
+            )
+
+        case .restoreInstrumentDefinition(let instrumentID, let priorDefinitionJSON):
+            // Undo of `instrument.update_definition` — write the captured
+            // prior definition back over the current one.
+            try await restoreInstrumentDefinition(
+                instrumentID: instrumentID,
+                priorDefinitionJSON: priorDefinitionJSON
+            )
+
+        case .deleteCommitment(let commitmentID):
+            // Undo of `commitment.create` — DELETE the row. Commitments are
+            // NOT append-only and have no inbound foreign keys to preserve.
+            try await deleteCommitmentRow(commitmentID: commitmentID)
+
+        case .restoreCommitmentStatus(let commitmentID, let priorStatus, let priorDueAt, let priorCompletedAt):
+            // Undo of `commitment.complete` / `.abandon` / `.snooze` — replay
+            // the captured prior state. Single handler reused across all 3
+            // tools because the shape of the change is identical (status
+            // ± due_at ± completed_at).
+            try await restoreCommitmentStatus(
+                commitmentID: commitmentID,
+                priorStatus: priorStatus,
+                priorDueAt: priorDueAt,
+                priorCompletedAt: priorCompletedAt
+            )
+
+        case .weakenMemory(let memoryID, let priorStrength, let priorLastStrengthUpdateAt):
+            // Undo of `memory.strengthen` — restore the pre-bump strength
+            // AND last_strength_update_at so the lazy decay formula picks up
+            // where it left off rather than treating the undo time as the
+            // anchor.
+            try await restoreMemoryStrength(
+                memoryID: memoryID,
+                priorStrength: priorStrength,
+                priorLastStrengthUpdateAt: priorLastStrengthUpdateAt
+            )
+
+        case .restoreDomainPrompt(let domain, let priorRolePrompt):
+            // Undo of `domain.update_prompt` — write the captured prior
+            // role_prompt back.
+            try await restoreDomainPrompt(
+                domain: domain,
+                priorRolePrompt: priorRolePrompt
+            )
         }
     }
 
@@ -425,6 +490,228 @@ actor UndoExecutor {
                 payloadJSON: "{\"kind\":\"undo\",\"memory_id\":\"\(memoryID.rawValue)\",\"archived\":\(archived)}",
                 source: "undo",
                 reasoning: "reverted action on memory \(memoryID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// Toggle an instrument's `archived_at`. `archivedAt == nil` clears
+    /// (unarchive); passing a Date sets (archive). Also bumps
+    /// `last_updated_at` so the agent's instrument.list view reflects the
+    /// change. Throws on row-not-found.
+    private func updateInstrumentArchivedAt(
+        instrumentID: InstrumentID,
+        archivedAt: Date?
+    ) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            let nowMs = Int64(nowDate.timeIntervalSince1970 * 1000)
+            let archivedMs: Int64? = archivedAt.map { Int64($0.timeIntervalSince1970 * 1000) }
+            try db.execute(
+                sql: """
+                    UPDATE instruments
+                    SET archived_at = ?, last_updated_at = ?
+                    WHERE instrument_id = ?
+                """,
+                arguments: [archivedMs, nowMs, instrumentID]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "instrument \(instrumentID.rawValue) not found — cannot toggle archived_at"
+                )
+            }
+            let verb = archivedAt == nil ? "unarchived" : "archived"
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "instrument \(instrumentID.rawValue) \(verb) by undo",
+                instrumentID: instrumentID,
+                payloadJSON: "{\"kind\":\"undo\",\"instrument_id\":\"\(instrumentID.rawValue)\",\"archived\":\(archivedAt == nil ? "false" : "true")}",
+                source: "undo",
+                reasoning: "reverted action on instrument \(instrumentID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// Restore the captured pre-update definition JSON for an instrument.
+    /// Throws on row-not-found.
+    private func restoreInstrumentDefinition(
+        instrumentID: InstrumentID,
+        priorDefinitionJSON: String
+    ) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            let nowMs = Int64(nowDate.timeIntervalSince1970 * 1000)
+            try db.execute(
+                sql: """
+                    UPDATE instruments
+                    SET definition_json = ?, last_updated_at = ?
+                    WHERE instrument_id = ?
+                """,
+                arguments: [priorDefinitionJSON, nowMs, instrumentID]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "instrument \(instrumentID.rawValue) not found — cannot restore definition"
+                )
+            }
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "instrument \(instrumentID.rawValue) definition restored by undo",
+                instrumentID: instrumentID,
+                payloadJSON: priorDefinitionJSON,
+                source: "undo",
+                reasoning: "reverted definition update on instrument \(instrumentID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// DELETE a commitment row. Commitments table has no inbound FKs we care
+    /// about; ek_reminder_id is Pod D's mirror, undone via its own handlers.
+    /// Throws on row-not-found.
+    private func deleteCommitmentRow(commitmentID: CommitmentID) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            try db.execute(
+                sql: "DELETE FROM commitments WHERE commitment_id = ?",
+                arguments: [commitmentID]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "commitment \(commitmentID.rawValue) not found — cannot delete"
+                )
+            }
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "commitment \(commitmentID.rawValue) deleted by undo",
+                commitmentID: commitmentID,
+                payloadJSON: "{\"kind\":\"undo\",\"commitment_id\":\"\(commitmentID.rawValue)\",\"deleted\":true}",
+                source: "undo",
+                reasoning: "reverted commitment.create on \(commitmentID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// Restore a commitment's prior status / due_at / completed_at snapshot.
+    /// Throws on row-not-found.
+    private func restoreCommitmentStatus(
+        commitmentID: CommitmentID,
+        priorStatus: CommitmentStatus,
+        priorDueAt: Date?,
+        priorCompletedAt: Date?
+    ) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            let dueMs: Int64? = priorDueAt.map { Int64($0.timeIntervalSince1970 * 1000) }
+            let completedMs: Int64? = priorCompletedAt.map { Int64($0.timeIntervalSince1970 * 1000) }
+            try db.execute(
+                sql: """
+                    UPDATE commitments
+                    SET status = ?, due_at = ?, completed_at = ?
+                    WHERE commitment_id = ?
+                """,
+                arguments: [priorStatus.rawValue, dueMs, completedMs, commitmentID]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "commitment \(commitmentID.rawValue) not found — cannot restore status"
+                )
+            }
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "commitment \(commitmentID.rawValue) status restored to \(priorStatus.rawValue)",
+                commitmentID: commitmentID,
+                payloadJSON: "{\"kind\":\"undo\",\"commitment_id\":\"\(commitmentID.rawValue)\",\"prior_status\":\"\(priorStatus.rawValue)\"}",
+                source: "undo",
+                reasoning: "reverted commitment status transition on \(commitmentID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// Restore a memory's pre-strengthen strength + last_strength_update_at.
+    /// Throws on row-not-found.
+    private func restoreMemoryStrength(
+        memoryID: MemoryID,
+        priorStrength: Double,
+        priorLastStrengthUpdateAt: Date
+    ) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            let priorMs = Int64(priorLastStrengthUpdateAt.timeIntervalSince1970 * 1000)
+            try db.execute(
+                sql: """
+                    UPDATE memory_items
+                    SET strength_at_last_update = ?, last_strength_update_at = ?
+                    WHERE memory_id = ?
+                """,
+                arguments: [priorStrength, priorMs, memoryID]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "memory \(memoryID.rawValue) not found — cannot weaken"
+                )
+            }
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "memory \(memoryID.rawValue) strength restored by undo",
+                payloadJSON: "{\"kind\":\"undo\",\"memory_id\":\"\(memoryID.rawValue)\",\"prior_strength\":\(priorStrength)}",
+                source: "undo",
+                reasoning: "reverted memory.strengthen on \(memoryID.rawValue)",
+                at: nowDate,
+                in: db
+            )
+        }
+    }
+
+    /// Restore a domain's pre-update role_prompt. Throws on row-not-found.
+    private func restoreDomainPrompt(
+        domain: String,
+        priorRolePrompt: String
+    ) async throws {
+        let queue = try await provider.database()
+        try await queue.write { db in
+            let nowDate = Date()
+            try db.execute(
+                sql: "UPDATE domains SET role_prompt = ? WHERE domain = ?",
+                arguments: [priorRolePrompt, domain]
+            )
+            let affected = db.changesCount
+            if affected == 0 {
+                throw UndoExecutorError.backendFailure(
+                    "domain '\(domain)' not found — cannot restore role_prompt"
+                )
+            }
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "manual_correction",
+                text: "domain \(domain) role_prompt restored by undo",
+                domain: domain,
+                payloadJSON: "{\"kind\":\"undo\",\"domain\":\"\(domain)\"}",
+                source: "undo",
+                reasoning: "reverted domain.update_prompt on \(domain)",
                 at: nowDate,
                 in: db
             )

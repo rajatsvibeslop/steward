@@ -33,9 +33,11 @@ final class AuditLogViewModel: ObservableObject {
     /// Membership is gated on whether the tool actually writes a TurnAction
     /// audit row — Pod C tools without a matching `InverseAction` case don't
     /// emit one, so listing them here would render rows the user can't undo
-    /// (qa-1's bug: "Nothing to undo" alerts). The 5 Pod C tools below are
-    /// the ones whose inverses live in `InverseAction` and have real
-    /// `UndoExecutor` handlers.
+    /// (qa-1's bug: "Nothing to undo" alerts). v1.1 expanded coverage from
+    /// the original 5 Pod C tools to all 12 mutating Pod C tools; the only
+    /// excluded Pod C kind is `event.capture`, which is append-only by
+    /// design (events table forbids DELETE — hard reject #10) and so has
+    /// no inverse.
     static let externallyMutating: Set<String> = [
         ToolID.calendarWrite.rawValue,
         ToolID.calendarModify.rawValue,
@@ -45,11 +47,20 @@ final class AuditLogViewModel: ObservableObject {
         ToolID.notificationSchedule.rawValue,
         ToolID.notificationScheduleRecurring.rawValue,
         ToolID.notificationCancel.rawValue,
+        ToolID.instrumentCreate.rawValue,
         ToolID.instrumentApplyEvent.rawValue,
+        ToolID.instrumentUpdateDefinition.rawValue,
+        ToolID.instrumentArchive.rawValue,
+        ToolID.commitmentCreate.rawValue,
+        ToolID.commitmentComplete.rawValue,
+        ToolID.commitmentAbandon.rawValue,
+        ToolID.commitmentSnooze.rawValue,
         ToolID.domainCreate.rawValue,
+        ToolID.domainUpdatePrompt.rawValue,
         ToolID.domainArchive.rawValue,
         ToolID.memorySave.rawValue,
         ToolID.memoryForget.rawValue,
+        ToolID.memoryStrengthen.rawValue,
         ToolID.mercyModeEngage.rawValue,
         ToolID.pauseEngage.rawValue,
         ToolID.quietHoursSet.rawValue,
@@ -135,9 +146,10 @@ final class AuditLogViewModel: ObservableObject {
         .calendarWrite, .calendarModify, .calendarDelete,
         .reminderCreate, .reminderComplete,
         .notificationSchedule, .notificationScheduleRecurring, .notificationCancel,
-        .instrumentApplyEvent,
-        .domainCreate, .domainArchive,
-        .memorySave, .memoryForget,
+        .instrumentCreate, .instrumentApplyEvent, .instrumentUpdateDefinition, .instrumentArchive,
+        .commitmentCreate, .commitmentComplete, .commitmentAbandon, .commitmentSnooze,
+        .domainCreate, .domainUpdatePrompt, .domainArchive,
+        .memorySave, .memoryForget, .memoryStrengthen,
     ]
 
     private func loadUndoneIDs(provider: DatabaseProvider, db: DatabaseQueue) async throws -> Set<String> {

@@ -227,6 +227,189 @@ final class AgentLoopTests: XCTestCase {
         }
         XCTAssertNotNil(dict["error"])
     }
+
+    // MARK: - Mercy / pause plumbing (nemesis bug #2)
+    //
+    // Before this patch the AgentLoop hardcoded `.off` / `nil` into every
+    // RuntimeContext it built — so the coordinator + domain agents never
+    // saw `mercy_mode: on` even when the user had engaged mercy mode in
+    // Settings. PromptAssembler renders mercy fine; the bug was upstream.
+    // These tests pin both construction sites (coordinator turn + handoff
+    // turn) to the live settings reader and assert the rendered runtime
+    // context shows `mercy_mode: on (...)` when settings say so.
+
+    func test_RuntimeContext_RendersMercyOn_WhenSettingsMercyUntilFuture() async throws {
+        // Capture the runtime via the SAME path AgentLoop uses: the same
+        // CoordinatorAgent + PromptAssembler that build the system prompt.
+        let now = Date(timeIntervalSince1970: 1_715_900_000)
+        let mercyUntil = now.addingTimeInterval(3600) // 1h in the future
+
+        let reader: RuntimeSettingsReader = { _ in
+            return (.on(until: mercyUntil), nil)
+        }
+
+        let (mercy, pauseUntil) = await reader(now)
+        let runtime = RuntimeContext(
+            now: now,
+            localTimezone: TimeZone(identifier: "America/New_York")!,
+            conversationState: .inFreeChat,
+            emptyStateBranch: nil,
+            mercyMode: mercy,
+            pauseUntil: pauseUntil,
+            activeDomains: [],
+            openCommitments: [],
+            recentEventsSummary: nil,
+            memoryHitsSummary: nil,
+            todayCalendarSummary: nil,
+            userMessage: "any",
+            priorTurnSummary: nil
+        )
+
+        let rendered = PromptAssembler().assemble(
+            for: .coordinator,
+            runtime: runtime,
+            scope: .coordinatorAll
+        ).text
+
+        XCTAssertTrue(
+            rendered.contains("mercy_mode: on"),
+            "runtime context must render mercy_mode: on when settings.mercyModeUntil is in the future; got:\n\(rendered)"
+        )
+        XCTAssertFalse(
+            rendered.contains("mercy_mode: off"),
+            "runtime context must not say mercy_mode: off when mercy is engaged"
+        )
+    }
+
+    func test_RuntimeContext_RendersMercyOff_WhenSettingsMercyUntilNilOrPast() async throws {
+        let now = Date(timeIntervalSince1970: 1_715_900_000)
+
+        // Case 1: mercy nil → off.
+        let nilReader: RuntimeSettingsReader = { _ in (.off, nil) }
+        let (m1, p1) = await nilReader(now)
+        XCTAssertEqual(m1, .off)
+        XCTAssertNil(p1)
+
+        let runtime1 = RuntimeContext(
+            now: now,
+            localTimezone: TimeZone(identifier: "America/New_York")!,
+            conversationState: .inFreeChat,
+            emptyStateBranch: nil,
+            mercyMode: m1,
+            pauseUntil: p1,
+            activeDomains: [],
+            openCommitments: [],
+            recentEventsSummary: nil,
+            memoryHitsSummary: nil,
+            todayCalendarSummary: nil,
+            userMessage: "any",
+            priorTurnSummary: nil
+        )
+        let rendered1 = PromptAssembler().assemble(
+            for: .coordinator, runtime: runtime1, scope: .coordinatorAll
+        ).text
+        XCTAssertTrue(rendered1.contains("mercy_mode: off"))
+
+        // Case 2: defaultRuntimeSettingsReader's expiry logic — a past
+        // mercyModeUntil renders off too. Use an inline reader to mimic
+        // what the production default does on its own (no DB needed).
+        let pastUntil = now.addingTimeInterval(-3600)
+        let pastReader: RuntimeSettingsReader = { current in
+            if pastUntil > current {
+                return (.on(until: pastUntil), nil)
+            }
+            return (.off, nil)
+        }
+        let (m2, _) = await pastReader(now)
+        XCTAssertEqual(m2, .off, "past mercyModeUntil must resolve to .off")
+    }
+
+    func test_AgentLoop_PassesSettingsReader_ToHandoffTool() async throws {
+        // Asserts the second bug site: the handoff tool's RuntimeContext
+        // also reflects live mercy state, not the old hardcoded .off. We
+        // wrap a real MockLLMSessionFactory in a recording factory that
+        // captures every systemPrompt it sees.
+        let underlying = MockLLMSessionFactory()
+        let recorder = PromptRecordingFactory(inner: underlying)
+        let registry = MapToolRegistry()
+        let healthAgent = DomainAgent(
+            domain: "health",
+            displayName: "Health",
+            rolePrompt: RolePromptTemplates.render(tone: .stayGentle, displayName: "Health")
+        )
+        let resolver = FixtureDomainAgentResolver(domains: [healthAgent])
+        let now = Date(timeIntervalSince1970: 1_715_900_000)
+        let mercyUntil = now.addingTimeInterval(3600)
+
+        let budget = SharedBudget(budget: TurnBudget(
+            handoffsRemaining: TurnBudget.defaultHandoffs,
+            contextTokenCeiling: TurnBudget.coordinatorTokenCeiling,
+            startedAt: now
+        ))
+        let handoff = AgentHandoffTool(
+            budget: budget,
+            resolver: resolver,
+            registry: registry,
+            factory: recorder,
+            temperature: 0.7,
+            timezone: TimeZone(identifier: "America/New_York")!,
+            clock: { now },
+            settingsReader: { _ in (.on(until: mercyUntil), nil) }
+        )
+
+        let resultJSON = try await handoff.invoke(
+            argsJSON: #"{"domain":"health","message":"ping"}"#
+        )
+        XCTAssertTrue(resultJSON.contains("\"domain\":\"health\""))
+
+        let prompts = await recorder.recordedPrompts()
+        guard let lastPrompt = prompts.last else {
+            XCTFail("expected at least one session built by the handoff tool")
+            return
+        }
+        XCTAssertTrue(
+            lastPrompt.contains("mercy_mode: on"),
+            "handoff-built domain prompt must reflect live mercy state; got:\n\(lastPrompt)"
+        )
+    }
+}
+
+// MARK: - Recording LLM factory (test seam for prompt inspection)
+
+/// Wraps a real `LLMSessionFactory` and captures every `systemPrompt`
+/// it's asked to build a session for. Used by mercy-plumbing tests to
+/// assert that AgentLoop / AgentHandoffTool surface live settings into
+/// the runtime context segment.
+private final class PromptRecordingFactory: LLMSessionFactory, @unchecked Sendable {
+    private let inner: any LLMSessionFactory
+    private let lock = NSLock()
+    private var prompts: [String] = []
+
+    init(inner: any LLMSessionFactory) {
+        self.inner = inner
+    }
+
+    var backendKind: LLMBackendKind { inner.backendKind }
+
+    func makeSession(
+        systemPrompt: String,
+        tools: [any LLMTool],
+        temperature: Double
+    ) async throws -> any LLMSession {
+        lock.lock()
+        prompts.append(systemPrompt)
+        lock.unlock()
+        return try await inner.makeSession(
+            systemPrompt: systemPrompt,
+            tools: tools,
+            temperature: temperature
+        )
+    }
+
+    func recordedPrompts() async -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return prompts
+    }
 }
 
 // MARK: - Recording test tool

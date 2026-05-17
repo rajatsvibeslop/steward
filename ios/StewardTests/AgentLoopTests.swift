@@ -1,8 +1,8 @@
 //
 //  AgentLoopTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
-//  Covers (per Track B brief):
+//  Covers:
 //   - Single-hop coordinator response
 //   - Multi-hop coordinator → handoff → domain → tool call → return
 //   - Hop cap enforcement (8 hops max; 9-hop attempt fails gracefully)

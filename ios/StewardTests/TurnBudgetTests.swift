@@ -1,6 +1,6 @@
 //
 //  TurnBudgetTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
 
 import XCTest

@@ -65,7 +65,7 @@ final class AppBootstrap: ObservableObject {
             // CSV-mirror + voice bootstrap: CSV mirror + network-driven sync + voice eager init.
             // All best-effort — voice failing (no model) or iCloud unavailable
             // must not block the app from opening.
-            await TrackFBootstrap.run()
+            await BackgroundServicesBootstrap.run()
 
             phase = .ready
         } catch {
@@ -98,7 +98,7 @@ final class AppBootstrap: ObservableObject {
 /// façade, kicks off the NWPathMonitor that drains the sync queue, and
 /// schedules the WhisperKit eager-init off the main actor so the first
 /// hold-to-talk tap feels instant.
-enum TrackFBootstrap {
+enum BackgroundServicesBootstrap {
     static func run() async {
         // 0. Wire each registered InstrumentKind into the CSV mirror via the
         //    InstrumentCSVCoder adapter. InstrumentRegistry.bootstrapAll()

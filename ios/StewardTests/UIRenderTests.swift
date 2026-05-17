@@ -1,8 +1,8 @@
 //
-//  UITrackE_RenderTests.swift
-//  StewardTests — Track E
+//  UIRenderTests.swift
+//  StewardTests
 //
-//  Pure-Swift tests for Track E's UI primitives. No UIKit / XCUI — we test
+//  Pure-Swift tests for the UI primitives. No UIKit / XCUI — we test
 //  the deterministic helpers + the instrument projector + the tool-call
 //  verb/object table. These run on the unit-test target and give us the
 //  "a few UI tests" coverage required by the DoD without standing up an
@@ -12,7 +12,7 @@
 import XCTest
 @testable import Steward
 
-final class UITrackE_RenderTests: XCTestCase {
+final class UIRenderTests: XCTestCase {
 
     // MARK: - DomainColor
 

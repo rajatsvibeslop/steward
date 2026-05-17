@@ -1,6 +1,6 @@
 //
 //  PromptAssemblerTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
 //  Asserts §1.7 segment ordering: identity, invariant_open, role_prompt,
 //  runtime_context, tool_catalog, invariant_close.

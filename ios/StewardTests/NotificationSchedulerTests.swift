@@ -2,7 +2,7 @@
 //  NotificationSchedulerTests.swift
 //  StewardTests
 //
-//  Track D test surface: cap, gap, quiet-hours, mercy, pause, mode template
+//  Test surface:  cap, gap, quiet-hours, mercy, pause, mode template
 //  substitution. Uses an in-memory fake UN center + a settings stub so the
 //  test doesn't touch the real notification center.
 //
@@ -422,7 +422,7 @@ final class NotificationSchedulerTests: XCTestCase {
     }
 
     func testOnboardingFollowupHasThreeDeterministicVariants() {
-        // UXR v2 §6.2 — Pod B's FollowupScheduler depends on these exact
+        // UXR v2 §6.2 — the FollowupScheduler depends on these exact
         // bodies. Pin the variant logic so a copy refactor can't break it
         // silently.
         let domainNoCapture = TemplateContext(

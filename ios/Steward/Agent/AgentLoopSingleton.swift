@@ -11,7 +11,7 @@
 //   - resolves the best `LLMSessionFactory` via `LLMResolver.resolve()`
 //     (Foundation Models when available, Mock otherwise),
 //   - builds a `MapToolRegistry` populated with the tool-catalog (from
-//     `ToolCatalog.allTrackCTools()`) PLUS the calendar / reminder /
+//     `ToolCatalog.allCatalogTools()`) PLUS the calendar / reminder /
 //     notification / HealthKit tools (their gateways are process-wide actors,
 //     not catalog leaf tools),
 //   - constructs `AgentLoop` with a `DBDomainAgentResolver` so handoffs pick
@@ -102,7 +102,7 @@ public actor AgentLoopHost {
 
         // Leaf tools from the catalog (events, instruments, commitments,
         // memory, domains, settings, agent.cross_consult).
-        for tool in ToolCatalog.allTrackCTools() {
+        for tool in ToolCatalog.allCatalogTools() {
             if let id = ToolID(rawValue: tool.id) {
                 await registry.register(tool, as: id)
             }

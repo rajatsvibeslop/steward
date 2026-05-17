@@ -8,7 +8,7 @@
 //   - skip render-only cells (totals, percentages)
 //
 //  Per-kind smoke; thorough cell-by-cell coverage lives in the integration
-//  tests for Pod F's CSVMirrorWatcher.
+//  tests for the `CSVMirrorWatcher`.
 //
 
 import XCTest

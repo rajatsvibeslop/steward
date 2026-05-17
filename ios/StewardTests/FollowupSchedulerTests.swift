@@ -1,6 +1,6 @@
 //
 //  FollowupSchedulerTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
 //  Pure-helper coverage of the day-0 followup scheduler. Body copy,
 //  fire-time window clamp, skip-no-engagement logic.

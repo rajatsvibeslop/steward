@@ -2,8 +2,8 @@
 //  CSVMirrorTests.swift
 //  StewardTests
 //
-//  Track F DoD coverage against Pod C's canonical InstrumentKind types:
-//  1. CSV writer round-trips for a real Pod C kind (RunningAccumulator) —
+//  CSV mirror coverage against the canonical InstrumentKind types:
+//  1. CSV writer round-trips for a registered instrument kind (RunningAccumulator) —
 //     ensureInstrumentFile produces a file with `__row_id`, `__steward_version`,
 //     `__last_synced_at` headers; reconcile on unchanged contents is a no-op.
 //  2. Conflict union-merge: per-row_id cell winners by mtime, disagreeing
@@ -12,7 +12,7 @@
 //     mergeConflictVersions).
 //  3. state.csv is NEVER read during reconciliation.
 //  4. Path traversal guard rejects `..` / `.` / `a..b`.
-//  5. ManualCorrection payload uses Pod C's snake_case (`row_id`, `cell`,
+//  5. ManualCorrection payload uses the canonical snake_case (`row_id`, `cell`,
 //     `old_value`, `new_value`, `correction_id`, `applied_at`, `reason`).
 //
 //  Note: parseCSVOverride returns [] for all kinds in v1 per impl-track-c's
@@ -28,7 +28,7 @@ import GRDB
 final class CSVMirrorTests: XCTestCase {
 
     override func setUp() async throws {
-        // Pod C's registry needs to be live for any reconcile/render call.
+        // the InstrumentRegistry needs to be live for any reconcile/render call.
         InstrumentRegistry._resetForTesting()
         InstrumentRegistry.bootstrapAll()
     }
@@ -56,7 +56,7 @@ final class CSVMirrorTests: XCTestCase {
         domain: String = "health",
         name: String = "movement_minutes",
         definition: String = #"{"unit":"min","daily_target":30,"capture_prompt":"how many minutes?"}"#,
-        // Matches Pod C's `RunningAccumulator.State` shape — includes
+        // Matches `RunningAccumulator.State` shape — includes
         // `window_events` so JSONDecoder.decode succeeds in the renderCSV
         // bridge. Generated via `RunningAccumulator.initialState(definition:now:)`.
         state: String = #"{"window_events":[],"today_total":0,"seven_day_avg":0,"thirty_day_avg":0,"last_event_at":null}"#
@@ -75,7 +75,7 @@ final class CSVMirrorTests: XCTestCase {
 
     private func registerCoders() async {
         await InstrumentCSVCoderRegistry.shared.reset()
-        await TrackFBootstrap.registerKindCoders()
+        await BackgroundServicesBootstrap.registerKindCoders()
     }
 
     // MARK: - Round-trip
@@ -203,7 +203,7 @@ final class CSVMirrorTests: XCTestCase {
         XCTAssertTrue(disagreements.isEmpty)
     }
 
-    // MARK: - ManualCorrection payload shape (Pod C canonical types)
+    // MARK: - ManualCorrection payload shape (canonical types)
 
     func test_manualCorrectionPayload_usesSnakeCaseKeys() throws {
         let c = ManualCorrection(

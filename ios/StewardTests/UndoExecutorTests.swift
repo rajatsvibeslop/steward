@@ -80,7 +80,7 @@ final class UndoExecutorTests: XCTestCase {
     }
 
     func testCrossPodInverseHandlersAreImplemented() async throws {
-        // Pod C's commit: the five cross-pod cases below MUST execute without
+        // v1 commit: the five cross-layer cases below MUST execute without
         // throwing `notYetImplemented`. They may still throw `backendFailure`
         // (e.g., row-not-found when the test passes a synthetic ID), which
         // is the contract — silent success is the failure mode we're guarding
@@ -101,7 +101,7 @@ final class UndoExecutorTests: XCTestCase {
                 // either way, not-yet-implemented is the failure case.
             } catch let e as UndoExecutorError {
                 if case .notYetImplemented = e {
-                    XCTFail("Pod C handler still missing for \(expectedKind.rawValue): \(e)")
+                    XCTFail("Handler still missing for \(expectedKind.rawValue): \(e)")
                 }
                 // Other UndoExecutorError variants (backendFailure for
                 // missing rows) are acceptable — they prove the handler
@@ -117,7 +117,7 @@ final class UndoExecutorTests: XCTestCase {
     // MARK: - AuditLog
 
     /// Build an isolated in-memory provider + audit log. Mirrors the pattern
-    /// used in Track A's SchemaTests.
+    /// used in SchemaTests.
     private func makeAuditLog() async throws -> (AuditLog, DatabaseProvider, URL) {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("track-d-tests-\(UUID().uuidString)")
@@ -207,7 +207,7 @@ final class UndoExecutorTests: XCTestCase {
         XCTAssertTrue(undone)
     }
 
-    // MARK: - Pod C cross-pod handler round-trips
+    // MARK: - Cross-layer handler round-trips
 
     private func makeExecutor(provider: DatabaseProvider) -> UndoExecutor {
         UndoExecutor(provider: provider, auditLog: AuditLog(provider: provider))
@@ -470,7 +470,7 @@ final class UndoExecutorTests: XCTestCase {
         }
     }
 
-    // MARK: - Pod C tools persist TurnAction audit rows
+    // MARK: - Catalog tools persist TurnAction audit rows
 
     func testDomainArchiveToolPersistsTurnActionForUndo() async throws {
         let (audit, provider, dir) = try await makeAuditLog()

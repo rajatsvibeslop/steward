@@ -2,19 +2,23 @@
 //  ToolCatalog.swift
 //  Steward
 //
-//  Single entry point AgentLoop calls to enumerate the full tool
-//  surface. Returns one `LLMTool` per spec §8 entry (minus the EventKit /
-//  notifications / CSV mirror / WhisperKit tools owned by Pods D and F —
-//  those pods register their own catalogs and merge into this one at
-//  AgentLoop construction).
+//  Single entry point AgentLoopHost calls to enumerate the leaf tools
+//  in `Tools/Catalog/`. Returns one `LLMTool` per spec §8 entry that has
+//  no runtime-actor dependency (events, instruments, commitments, memory,
+//  domains, agent.cross_consult, settings/safety).
+//
+//  Tools backed by process-wide actors — calendar, reminders, notifications,
+//  HealthKit, CSV mirror — are NOT in this enumeration. AgentLoopHost adds
+//  them directly after merging this list.
 //
 
 import Foundation
 
 enum ToolCatalog {
-    /// Tool-catalog surface. AgentLoopHost merges this with the EventKit + Notifications + HealthKit tool sets
-    /// when building the coordinator's available-tools list.
-    static func allTrackCTools(
+    /// Leaf-tool surface (see file header). AgentLoopHost merges this with
+    /// the calendar / reminder / notification / HealthKit tools when
+    /// building the coordinator's available-tools list.
+    static func allCatalogTools(
         provider: DatabaseProvider = .shared,
         settings: SettingsStore = .shared,
         embedder: Embedder = .shared,

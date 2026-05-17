@@ -92,7 +92,7 @@ enum CSVMirrorAvailabilityClassifier {
 }
 
 /// Process-wide holder for the resolved availability. Written once at
-/// bootstrap (TrackFBootstrap.run); read off the main actor by Settings
+/// bootstrap (BackgroundServicesBootstrap.run); read off the main actor by Settings
 /// + Today. Read-mostly so we use an isolated actor and surface a synchronous
 /// main-actor snapshot via `@MainActor` mirror updated when the boot path
 /// publishes — same pattern as `VoiceCaptureRegistry.current`.
@@ -104,7 +104,7 @@ enum CSVMirrorAvailabilityRegistry {
     /// the real value flows out.
     private(set) static var current: CSVMirrorAvailability = .disabled
 
-    /// Called by `TrackFBootstrap.run` after it has chosen the CSV root.
+    /// Called by `BackgroundServicesBootstrap.run` after it has chosen the CSV root.
     static func publish(_ availability: CSVMirrorAvailability) {
         current = availability
         NotificationCenter.default.post(

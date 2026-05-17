@@ -1,9 +1,9 @@
 //
 //  MockLLMSessionTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
 //  Walks the six canned turns from implementation-addendum §1.10, plus the
-//  qa-1 coverage fixes (Pod D tool intents + morning-brief deterministic
+//  qa-1 coverage fixes (EventKit/Notifications tool intents + morning-brief deterministic
 //  copy) and a round-trip empty-state integration test that proves the
 //  emitted args decode against every real tool's `ArgsStruct`.
 //
@@ -299,7 +299,7 @@ final class MockLLMSessionTests: XCTestCase {
 
     // MARK: - Empty-state protocol round-trip
     //
-    // Walks turns 1, 3, 4, 5, 6 against real Pod C tools backed by an
+    // Walks turns 1, 3, 4, 5, 6 against real catalog tools backed by an
     // in-memory DB. Asserts that every emitted argsJSON decodes cleanly
     // and that turn 4's instrument_id flows into turns 5 and 6 via the
     // shared MockSessionStateStore.

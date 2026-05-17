@@ -3,7 +3,7 @@
 //  StewardTests
 //
 //  ToolScope + ToolGuard validation. The guard rejects out-of-scope tools
-//  and pinned-arg violations. Pod B's actual API takes pre-parsed
+//  and pinned-arg violations. AgentLoop's actual API takes pre-parsed
 //  `[String: AnyCodableScalar]` args (not a JSON string) and throws
 //  `ToolGuardError.toolOutOfScope` / `.argPinViolation`.
 //

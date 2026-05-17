@@ -1,6 +1,6 @@
 //
 //  EmptyStateRouterTests.swift
-//  StewardTests — Track B
+//  StewardTests
 //
 //  Determinism + branch coverage for the pre-LLM router.
 //

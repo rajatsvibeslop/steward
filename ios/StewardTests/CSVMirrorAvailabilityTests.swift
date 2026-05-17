@@ -1,6 +1,6 @@
 //
 //  CSVMirrorAvailabilityTests.swift
-//  StewardTests — Track F (v1.1 patch)
+//  StewardTests
 //
 //  Covers:
 //   1. The pure classifier function — does the (mirrorEnabled × iCloud

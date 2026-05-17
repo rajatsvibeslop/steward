@@ -2,7 +2,7 @@
 //  VoiceCaptureServiceTests.swift
 //  StewardTests
 //
-//  Track F voice capture coverage:
+//  Voice capture coverage:
 //   - WhisperKitModelLocator fails-closed when the bundle has no model
 //     (hard reject #15 — no lazy-download path even exists).
 //   - WhisperKitModelLocator returns the URL when the model dir is present.

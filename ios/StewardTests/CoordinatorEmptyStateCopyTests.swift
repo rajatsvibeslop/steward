@@ -1,6 +1,6 @@
 //
 //  CoordinatorEmptyStateCopyTests.swift
-//  StewardTests — Track B (deslop B3)
+//  StewardTests
 //
 //  Verifies that the verbatim UXR v2 §1.1–§5.1 copy templates are
 //  injected into the runtime_context block when the coordinator is in

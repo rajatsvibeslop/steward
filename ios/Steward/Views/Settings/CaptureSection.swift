@@ -8,7 +8,7 @@
 //  Application-Support fallback case. v1 always told the user "Mirrors your
 //  instruments to Steward/" even when iCloud Drive was off and nothing of
 //  the kind was happening — nemesis caveat C. Reads the resolved state from
-//  `CSVMirrorAvailabilityRegistry` (published once by TrackFBootstrap) and
+//  `CSVMirrorAvailabilityRegistry` (published once by BackgroundServicesBootstrap) and
 //  re-renders when bootstrap posts `csvMirrorAvailabilityChanged`.
 //
 

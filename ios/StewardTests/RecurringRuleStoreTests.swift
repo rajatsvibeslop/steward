@@ -2,7 +2,7 @@
 //  RecurringRuleStoreTests.swift
 //  StewardTests
 //
-//  Track D fix-batch tests:
+//  Notifications fix-batch tests:
 //  - RecurringRuleStore round-trips a rule and filters active vs cancelled.
 //  - NotificationScheduler.topUpHorizon re-issues recurring occurrences via
 //    the persisted store (deslop FIX #3: cron-via-notification correctness).
@@ -97,12 +97,12 @@ final class RecurringRuleStoreTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         // Inject DEFAULT settings into the test DB so the scheduler's
-        // SettingsProviding doesn't fight us. Track A's migration seeds
+        // SettingsProviding doesn't fight us. the v1 migration seeds
         // a row already, so just confirm it.
         let queue = try await provider.database()
         try await queue.read { db in
             let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM settings WHERE id = 1") ?? 0
-            XCTAssertEqual(count, 1, "Track A migration should seed settings row")
+            XCTAssertEqual(count, 1, "v1 migration should seed settings row")
         }
 
         // Persist a daily morning-brief rule directly via the store. Skip
@@ -117,7 +117,7 @@ final class RecurringRuleStoreTests: XCTestCase {
         _ = try await store.insert(record)
 
         // Wire up the scheduler with a fake UN center + live settings (from
-        // Track A migration) + the test rule store.
+        // v1 migration) + the test rule store.
         let center = FakeUNCenter()
         let settings = FakeSettingsProvider(snapshot: Settings(
             quietHours: Settings.QuietHours(start: "22:00", end: "05:00"),

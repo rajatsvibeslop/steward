@@ -2,7 +2,7 @@
 //  SchemaTests.swift
 //  StewardTests
 //
-//  Track A DoD: open a fresh DB and verify all tables + FTS5 virtual tables
+//  DoD: open a fresh DB and verify all tables + FTS5 virtual tables
 //  exist. Also exercises that re-opening the same file is idempotent (the
 //  migration must not destroy data on re-run).
 //

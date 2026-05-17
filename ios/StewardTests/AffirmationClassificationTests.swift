@@ -1,6 +1,6 @@
 //
 //  AffirmationClassificationTests.swift
-//  StewardTests — Track B (deslop S2)
+//  StewardTests
 //
 //  Confirms `AgentLoop.classifyAffirmation` tokenizes properly and is not
 //  fooled by substring matches like "no okay" or "yeah no".

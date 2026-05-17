@@ -11,7 +11,7 @@
 //      the `InstrumentKind` protocol surface (`K.renderCSV`, `K.parseCSVOverride`) plus a
 //      generic state.csv renderer that walks the state JSON.
 //   2. `InstrumentCSVCoderRegistry` — actor map `kindID -> InstrumentCSVCoder`.
-//      `TrackFBootstrap.registerKindCoders()` registers all 7 of the registered InstrumentKinds
+//      `BackgroundServicesBootstrap.registerKindCoders()` registers all 7 of the registered InstrumentKinds
 //      kinds; `CSVMirrorWatcher` looks up by `instruments.kind`.
 //
 //  Hard reject #9 still holds: no `switch kindID { ... }` anywhere; every
@@ -136,7 +136,7 @@ extension InstrumentCSVCoder {
 // MARK: - Registry
 
 /// Process-wide registry mapping `instruments.kind` strings to a coder.
-/// `TrackFBootstrap.registerKindCoders()` calls `register` for each of the registered
+/// `BackgroundServicesBootstrap.registerKindCoders()` calls `register` for each of the registered
 /// 7 built-in kinds at app boot; the watcher looks them up by the row's
 /// `kind` column.
 actor InstrumentCSVCoderRegistry {

@@ -30,6 +30,12 @@ final class AuditLogViewModel: ObservableObject {
     }
 
     /// Subset of `events.kind` we surface in the activity feed (Designer §3.5).
+    /// Membership is gated on whether the tool actually writes a TurnAction
+    /// audit row — Pod C tools without a matching `InverseAction` case don't
+    /// emit one, so listing them here would render rows the user can't undo
+    /// (qa-1's bug: "Nothing to undo" alerts). The 5 Pod C tools below are
+    /// the ones whose inverses live in `InverseAction` and have real
+    /// `UndoExecutor` handlers.
     static let externallyMutating: Set<String> = [
         ToolID.calendarWrite.rawValue,
         ToolID.calendarModify.rawValue,
@@ -39,17 +45,9 @@ final class AuditLogViewModel: ObservableObject {
         ToolID.notificationSchedule.rawValue,
         ToolID.notificationScheduleRecurring.rawValue,
         ToolID.notificationCancel.rawValue,
-        ToolID.instrumentCreate.rawValue,
         ToolID.instrumentApplyEvent.rawValue,
-        ToolID.instrumentArchive.rawValue,
-        ToolID.instrumentUpdateDefinition.rawValue,
-        ToolID.commitmentCreate.rawValue,
-        ToolID.commitmentComplete.rawValue,
-        ToolID.commitmentAbandon.rawValue,
-        ToolID.commitmentSnooze.rawValue,
         ToolID.domainCreate.rawValue,
         ToolID.domainArchive.rawValue,
-        ToolID.domainUpdatePrompt.rawValue,
         ToolID.memorySave.rawValue,
         ToolID.memoryForget.rawValue,
         ToolID.mercyModeEngage.rawValue,
@@ -137,10 +135,8 @@ final class AuditLogViewModel: ObservableObject {
         .calendarWrite, .calendarModify, .calendarDelete,
         .reminderCreate, .reminderComplete,
         .notificationSchedule, .notificationScheduleRecurring, .notificationCancel,
-        .instrumentCreate, .instrumentApplyEvent, .instrumentArchive,
-        .instrumentUpdateDefinition,
-        .commitmentCreate, .commitmentComplete, .commitmentAbandon, .commitmentSnooze,
-        .domainCreate, .domainArchive, .domainUpdatePrompt,
+        .instrumentApplyEvent,
+        .domainCreate, .domainArchive,
         .memorySave, .memoryForget,
     ]
 

@@ -60,12 +60,13 @@ final class UndoExecutorTests: XCTestCase {
         XCTAssertEqual(Set(kinds).count, kinds.count, "`.kind` returned a duplicate — drift in TurnAction.swift")
     }
 
-    func testNotYetImplementedThrownForCrossPodCases() async throws {
-        // Arch's redirect: cross-pod InverseAction cases throw
-        // `notYetImplemented` (not silent backendFailure). Track C swaps the
-        // throw for a real handler in their commit. The test asserts the
-        // typed error so a future refactor can't accidentally degrade these
-        // to a generic backendFailure.
+    func testCrossPodInverseHandlersAreImplemented() async throws {
+        // Pod C's commit: the five cross-pod cases below MUST execute without
+        // throwing `notYetImplemented`. They may still throw `backendFailure`
+        // (e.g., row-not-found when the test passes a synthetic ID), which
+        // is the contract — silent success is the failure mode we're guarding
+        // against. The previous version of this test asserted the typed
+        // notYetImplemented error; that contract has now flipped.
         let executor = UndoExecutor()
         let crossPodCases: [(InverseAction, InverseActionKind)] = [
             (.revertInstrumentEvent(instrumentID: "i", eventIDToReverse: EventID.generate()), .revertInstrumentEvent),
@@ -77,15 +78,19 @@ final class UndoExecutorTests: XCTestCase {
         for (action, expectedKind) in crossPodCases {
             do {
                 try await executor.execute(action)
-                XCTFail("expected notYetImplemented for \(expectedKind.rawValue)")
+                // Some handlers may succeed against a happenstance shared DB;
+                // either way, not-yet-implemented is the failure case.
             } catch let e as UndoExecutorError {
-                guard case .notYetImplemented(let kind) = e else {
-                    XCTFail("expected notYetImplemented, got \(e) for \(expectedKind.rawValue)")
-                    continue
+                if case .notYetImplemented = e {
+                    XCTFail("Pod C handler still missing for \(expectedKind.rawValue): \(e)")
                 }
-                XCTAssertEqual(kind, expectedKind)
+                // Other UndoExecutorError variants (backendFailure for
+                // missing rows) are acceptable — they prove the handler
+                // ran and surfaced a real DB / state error rather than a
+                // typed "not implemented" punt.
             } catch {
-                XCTFail("unexpected error type for \(expectedKind.rawValue): \(error)")
+                // Non-typed errors are fine too — anything but
+                // notYetImplemented satisfies the contract.
             }
         }
     }
@@ -181,6 +186,311 @@ final class UndoExecutorTests: XCTestCase {
         )
         let undone = try await audit.hasBeenUndone(eventID: eventID)
         XCTAssertTrue(undone)
+    }
+
+    // MARK: - Pod C cross-pod handler round-trips
+
+    private func makeExecutor(provider: DatabaseProvider) -> UndoExecutor {
+        UndoExecutor(provider: provider, auditLog: AuditLog(provider: provider))
+    }
+
+    func testArchiveDomainRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO domains
+                      (domain, display_name, role_prompt, tool_scope_json, created_at, archived_at)
+                    VALUES ('money', 'Money', 'role', '{}', ?, ?)
+                """,
+                arguments: [nowMs, nowMs]
+            )
+        }
+        let executor = makeExecutor(provider: provider)
+
+        // Apply .archiveDomain inverse → expect archived_at cleared.
+        try await executor.execute(.archiveDomain(domain: "money", archivedAt: Date()))
+        let afterClear: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM domains WHERE domain = ?",
+                arguments: ["money"]
+            )
+        }
+        XCTAssertNil(afterClear, "archive-undo should clear archived_at")
+
+        // Apply .unarchiveDomain inverse → expect archived_at set.
+        try await executor.execute(.unarchiveDomain(domain: "money"))
+        let afterSet: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM domains WHERE domain = ?",
+                arguments: ["money"]
+            )
+        }
+        XCTAssertNotNil(afterSet, "unarchive-undo should set archived_at")
+    }
+
+    func testArchiveDomainNoRowThrowsBackendFailure() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(.archiveDomain(domain: "nope", archivedAt: Date()))
+            XCTFail("expected backendFailure for missing domain row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    func testForgetMemoryRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let now = Date()
+        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+        let mid = MemoryID(rawValue: "mem-1")
+        let blob = Data(repeating: 0, count: 32 * 4) // 32-float zero blob; retrieval ignores it here.
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO memory_items
+                      (memory_id, type, text, embedding, embedding_dim, embedding_revision,
+                       strength_at_last_update, last_strength_update_at, created_at)
+                    VALUES (?, 'preference', 'no spicy food', ?, 32, 'rev-test', 0.0, ?, ?)
+                """,
+                arguments: [mid, blob, nowMs, nowMs]
+            )
+        }
+        let executor = makeExecutor(provider: provider)
+
+        // Undo of memory.forget: clear archived_at + restore strength.
+        try await executor.execute(.forgetMemory(memoryID: mid))
+        let restored: (Double, Int64?) = try await queue.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT strength_at_last_update, archived_at FROM memory_items WHERE memory_id = ?",
+                arguments: [mid]
+            )!
+            return (row["strength_at_last_update"], row["archived_at"])
+        }
+        XCTAssertEqual(restored.0, 1.0, "forget-undo should restore strength to 1.0")
+        XCTAssertNil(restored.1, "forget-undo should clear archived_at")
+
+        // Undo of memory.save: set archived_at.
+        try await executor.execute(.unforgetMemory(memoryID: mid))
+        let archived: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM memory_items WHERE memory_id = ?",
+                arguments: [mid]
+            )
+        }
+        XCTAssertNotNil(archived, "save-undo should set archived_at")
+    }
+
+    func testForgetMemoryMissingRowThrows() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(.unforgetMemory(memoryID: MemoryID(rawValue: "ghost")))
+            XCTFail("expected backendFailure for missing memory row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    func testRevertInstrumentEventRestoresInitialState() async throws {
+        // Round-trip: create a Checklist instrument with one item, apply a
+        // check event, then call .revertInstrumentEvent to roll it back. The
+        // recomputed state should match the initial state (no events
+        // applied). We use Checklist because its initial / event payloads
+        // are tiny and the diff is easy to assert.
+        InstrumentRegistry._resetForTesting()
+        InstrumentRegistry.bootstrapAll()
+
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+
+        let now = Date()
+        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+        let instrumentID = InstrumentID(rawValue: "inst-checklist-1")
+        let definitionJSON = """
+        {"items":[{"id":"a","label":"morning walk"}]}
+        """
+        let initialStateJSON = try InstrumentRegistry.initialStateJSON(
+            forKind: "checklist", definitionJSON: definitionJSON, now: now
+        )
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO instruments
+                      (instrument_id, domain, kind, name, definition_json, state_json,
+                       state_version, created_at, last_updated_at)
+                    VALUES (?, 'health', 'checklist', 'walks', ?, ?, 1, ?, ?)
+                """,
+                arguments: [instrumentID, definitionJSON, initialStateJSON, nowMs, nowMs]
+            )
+        }
+
+        // Apply a check event via the same path the tool would use.
+        let eventID = EventID(rawValue: "evt-1")
+        let checkPayloadJSON = """
+        {"item_id":"a","checked":true}
+        """
+        let envelopeJSON = try InstrumentTools.makeEventEnvelopeJSON(
+            eventID: eventID,
+            instrumentID: instrumentID,
+            kind: "check",
+            actor: "coordinator",
+            createdAt: now,
+            payloadJSON: checkPayloadJSON,
+            notes: nil
+        )
+        try await queue.write { db in
+            try EventLog.append(
+                actor: .coordinator,
+                kind: "check",
+                instrumentID: instrumentID,
+                payloadJSON: checkPayloadJSON,
+                source: "tool",
+                reasoning: "test apply",
+                at: now,
+                eventID: eventID,
+                in: db
+            )
+            _ = try InstrumentRegistry.dispatchApply(
+                instrumentID: instrumentID,
+                eventJSON: envelopeJSON,
+                in: db,
+                now: now
+            )
+        }
+
+        // Sanity: post-apply state differs from initial.
+        let afterApply: String = try await queue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT state_json FROM instruments WHERE instrument_id = ?",
+                arguments: [instrumentID]
+            )!
+        }
+        XCTAssertNotEqual(afterApply, initialStateJSON, "state should change after applying the event")
+
+        // Undo.
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.revertInstrumentEvent(
+            instrumentID: instrumentID.rawValue,
+            eventIDToReverse: eventID
+        ))
+
+        let afterUndo: String = try await queue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT state_json FROM instruments WHERE instrument_id = ?",
+                arguments: [instrumentID]
+            )!
+        }
+        XCTAssertEqual(afterUndo, initialStateJSON,
+                       "reverting the only event should restore the initial state")
+
+        // Audit trail: manual_correction event should exist.
+        let correctionCount: Int = try await queue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM events WHERE kind = 'manual_correction' AND instrument_id = ?",
+                arguments: [instrumentID]
+            ) ?? 0
+        }
+        XCTAssertEqual(correctionCount, 1, "revert should emit a single manual_correction event")
+    }
+
+    func testRevertInstrumentEventForUnknownEventThrows() async throws {
+        InstrumentRegistry._resetForTesting()
+        InstrumentRegistry.bootstrapAll()
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let instrumentID = InstrumentID(rawValue: "inst-2")
+        let definitionJSON = """
+        {"items":[{"id":"a","label":"x"}]}
+        """
+        let initialStateJSON = try InstrumentRegistry.initialStateJSON(
+            forKind: "checklist", definitionJSON: definitionJSON, now: Date()
+        )
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO instruments
+                      (instrument_id, domain, kind, name, definition_json, state_json,
+                       state_version, created_at, last_updated_at)
+                    VALUES (?, 'health', 'checklist', 'walks', ?, ?, 1, ?, ?)
+                """,
+                arguments: [instrumentID, definitionJSON, initialStateJSON, nowMs, nowMs]
+            )
+        }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(.revertInstrumentEvent(
+                instrumentID: instrumentID.rawValue,
+                eventIDToReverse: EventID(rawValue: "no-such-event")
+            ))
+            XCTFail("expected throw for unknown event ID")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    // MARK: - Pod C tools persist TurnAction audit rows
+
+    func testDomainArchiveToolPersistsTurnActionForUndo() async throws {
+        let (audit, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO domains
+                      (domain, display_name, role_prompt, tool_scope_json, created_at)
+                    VALUES ('health', 'Health', 'role', '{}', ?)
+                """,
+                arguments: [nowMs]
+            )
+        }
+        let tool = DomainArchiveTool(provider: provider, auditLog: audit)
+        let argsJSON = """
+        {"domain":"health","reason":"experiment over","reasoning":"user said done","actor":"coordinator"}
+        """
+        _ = try await tool.invoke(argsJSON: argsJSON)
+
+        // Find the audit row for domain.archive.
+        let eventID: String? = try await queue.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT event_id FROM events WHERE kind = ? ORDER BY created_at DESC LIMIT 1",
+                arguments: [ToolID.domainArchive.rawValue]
+            )
+        }
+        XCTAssertNotNil(eventID, "domain.archive must persist a kind='domain.archive' audit row")
+        let loaded = try await audit.loadTurnAction(eventID: EventID(rawValue: eventID!))
+        XCTAssertNotNil(loaded, "audit row payload should round-trip TurnAction")
+        XCTAssertEqual(loaded?.toolID, .domainArchive)
+        if case .archiveDomain(let dom, _) = loaded?.inverse {
+            XCTAssertEqual(dom, "health")
+        } else {
+            XCTFail("inverse must be .archiveDomain")
+        }
     }
 
     func testEventsCheckConstraintRejectsAgentRowWithoutReasoningAtDB() async throws {

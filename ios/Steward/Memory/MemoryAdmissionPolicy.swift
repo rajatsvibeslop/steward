@@ -77,6 +77,7 @@ enum MemoryAdmissionPolicy {
                 WHERE type = ?
                   AND (domain IS ? OR (domain IS NULL AND ? IS NULL))
                   AND strength_at_last_update > 0
+                  AND archived_at IS NULL
             """,
             arguments: [proposal.type.rawValue, proposal.domain, proposal.domain]
         )

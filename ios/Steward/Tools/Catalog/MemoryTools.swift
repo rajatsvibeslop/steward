@@ -90,13 +90,16 @@ struct MemorySaveTool: LLMTool {
 
     let provider: DatabaseProvider
     let embedder: Embedder
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
 
     init(provider: DatabaseProvider = .shared,
          embedder: Embedder = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
         self.embedder = embedder
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -211,6 +214,30 @@ struct MemorySaveTool: LLMTool {
                     in: dbase
                 )
             }
+
+            // Track-D parity audit row. Settings → Recent actions surfaces this
+            // by `kind == ToolID.memorySave.rawValue` and offers undo via
+            // `.unforgetMemory(memoryID)` — flips archived_at so retrieval
+            // stops seeing the row.
+            let auditAction = TurnAction(
+                turnID: TurnID.generate(),
+                toolID: .memorySave,
+                actor: ActorRef.from(actor),
+                executedAt: timestamp,
+                reasoning: args.reasoning,
+                inverse: .unforgetMemory(memoryID: id)
+            )
+            do {
+                _ = try await auditLog.recordAgentAction(
+                    auditAction,
+                    text: args.text,
+                    domain: args.domain,
+                    source: "tool:memory.save"
+                )
+            } catch {
+                // Audit failure mustn't fail the primary tool result.
+            }
+
             let result = MemorySaveResult(
                 outcome: conflicts == nil ? .admitted : .admittedWithContradiction,
                 memoryID: id,
@@ -368,10 +395,13 @@ struct MemoryForgetTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -393,6 +423,27 @@ struct MemoryForgetTool: LLMTool {
                 in: dbase
             )
         }
+
+        // Track-D parity audit row. Undo path restores `archived_at = NULL`
+        // AND bumps strength so the reranker re-surfaces the row.
+        let auditAction = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .memoryForget,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .forgetMemory(memoryID: args.memoryID)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                auditAction,
+                text: args.reason,
+                source: "tool:memory.forget"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(MemoryForgetResult(memoryID: args.memoryID, forgottenAt: timestamp))
     }
 }

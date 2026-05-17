@@ -251,6 +251,20 @@ enum ActorRef: Codable, Sendable, Equatable, Hashable {
         case .coordinator, .agent: return true
         }
     }
+
+    /// Bridge from Pod C's `EventActor`. The two enums share the same set of
+    /// cases but live in different layers (Pod C went through EventLog first,
+    /// then we layered the audit log on top). Keeping the bridge here means
+    /// Pod C tools don't have to import an AuditLog-private helper to call
+    /// `recordAgentAction`.
+    static func from(_ eventActor: EventActor) -> ActorRef {
+        switch eventActor {
+        case .user: return .user
+        case .system: return .system
+        case .coordinator: return .coordinator
+        case .agent(let domain): return .agent(domain: domain)
+        }
+    }
 }
 
 // MARK: - Calendar / Reminder payloads (used by InverseAction)

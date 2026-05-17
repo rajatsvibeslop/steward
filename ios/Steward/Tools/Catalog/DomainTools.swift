@@ -65,10 +65,13 @@ struct DomainCreateTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -128,6 +131,29 @@ struct DomainCreateTool: LLMTool {
                 in: dbase
             )
         }
+
+        // Track-D parity audit row so Settings → Recent actions can offer
+        // one-tap undo. Inverse of domain.create is unarchive of the row
+        // (we re-archive it on undo to hide it from the LLM tool surface).
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .domainCreate,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .unarchiveDomain(domain: args.domain)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.displayName,
+                domain: args.domain,
+                source: "tool:domain.create"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(DomainCreateResult(domain: args.domain, createdAt: timestamp))
     }
 }
@@ -316,10 +342,13 @@ struct DomainArchiveTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -345,6 +374,27 @@ struct DomainArchiveTool: LLMTool {
                 in: dbase
             )
         }
+
+        // Audit row + undo handle.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .domainArchive,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .archiveDomain(domain: args.domain, archivedAt: timestamp)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.reason,
+                domain: args.domain,
+                source: "tool:domain.archive"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(DomainArchiveResult(domain: args.domain, archivedAt: timestamp))
     }
 }

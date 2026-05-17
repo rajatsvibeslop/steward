@@ -368,11 +368,14 @@ struct InstrumentApplyEventTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
 
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -423,6 +426,37 @@ struct InstrumentApplyEventTool: LLMTool {
                 stateVersion: row.stateVersion
             )
         }
+
+        // Track-D parity audit row: persists the inverse so Settings → Recent
+        // actions can offer one-tap undo against this event. Settings reads
+        // events.kind == ToolID.rawValue and expects payload_json.turn_action.
+        // The semantic event row from EventLog.append above is what
+        // instruments / replay consume; this second row is the undo handle.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .instrumentApplyEvent,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .revertInstrumentEvent(
+                instrumentID: args.instrumentID.rawValue,
+                eventIDToReverse: eventID
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.notes,
+                instrumentID: args.instrumentID.rawValue,
+                source: "tool:instrument.apply_event"
+            )
+        } catch {
+            // Pod D's pattern: audit write failure must not crash the
+            // primary tool result — the instrument mutation already
+            // committed. UndoExecutor handles the "no audit row found"
+            // path explicitly via UndoOutcome.notFound.
+        }
+
         return try ToolJSON.encode(result)
     }
 }

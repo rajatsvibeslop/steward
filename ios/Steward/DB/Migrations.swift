@@ -47,6 +47,17 @@ enum Migrations {
             try createNotificationRecurringRulesTable(db)
         }
 
+        // v3 — Track C audit/undo patch: undo of `memory.save` /
+        // `memory.forget` needs a single column to flip so the inverse is a
+        // one-statement UPDATE that round-trips cleanly. Strength-based
+        // soft-delete (strength=0) was lossy for restore — the original
+        // pre-forget strength wasn't captured. archived_at gives us a
+        // dedicated "hidden from retrieval" channel orthogonal to decay.
+        // Additive column, NULL for every existing row → safe.
+        migrator.registerMigration("v3_memory_items_archived_at") { db in
+            try addMemoryItemsArchivedAtColumn(db)
+        }
+
         return migrator
     }()
 
@@ -321,6 +332,17 @@ extension Migrations {
     // active rules into the next horizon on every foreground tick. Cancelled
     // rules are kept (cancelled_at IS NOT NULL) so the audit log can still
     // resolve the rule's history.
+
+    // v3 — additive column on memory_items. NULL = visible (default).
+    // Retrieval filters `archived_at IS NULL`; undo handlers flip the value.
+    fileprivate static func addMemoryItemsArchivedAtColumn(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE memory_items ADD COLUMN archived_at INTEGER")
+        try db.execute(sql: """
+            CREATE INDEX memory_archived_at
+            ON memory_items(archived_at)
+            WHERE archived_at IS NOT NULL
+        """)
+    }
 
     fileprivate static func createNotificationRecurringRulesTable(_ db: Database) throws {
         try db.execute(sql: """

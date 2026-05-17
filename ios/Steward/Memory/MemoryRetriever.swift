@@ -167,6 +167,7 @@ enum MemoryRetriever {
             JOIN memory_items mi ON mi.rowid = memory_fts.rowid
             WHERE memory_fts MATCH ?
               AND mi.strength_at_last_update > 0
+              AND mi.archived_at IS NULL
         """
         var args: [DatabaseValueConvertible?] = [sanitized]
         if let domain {
@@ -225,6 +226,7 @@ enum MemoryRetriever {
             SELECT memory_id, embedding
             FROM memory_items
             WHERE strength_at_last_update > 0
+              AND archived_at IS NULL
         """
         var args: [DatabaseValueConvertible?] = []
         if let domain {

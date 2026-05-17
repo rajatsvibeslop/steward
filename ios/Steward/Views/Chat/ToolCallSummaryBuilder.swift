@@ -167,26 +167,31 @@ enum ToolCallSummaryBuilder {
         // (§4 hard reject #9).
     }
 
-    /// Reversibility per Designer §1.3 list.
+    /// Reversibility per Designer §1.3 list, constrained by Pod C's
+    /// implemented inverses. The full Designer list included tools whose
+    /// inverses don't (yet) live in `InverseAction`; rendering Undo for
+    /// them would surface qa-1's "Nothing to undo" — instead we only mark
+    /// reversible the tools whose audit row carries a real, executable
+    /// `InverseAction` and whose `UndoExecutor` handler is implemented.
     private static func isReversible(_ toolID: ToolID) -> Bool {
         switch toolID {
         case .calendarWrite, .calendarModify, .calendarDelete,
              .reminderCreate, .reminderComplete,
              .notificationSchedule, .notificationScheduleRecurring, .notificationCancel,
-             .instrumentCreate, .instrumentApplyEvent, .instrumentArchive,
-             .instrumentUpdateDefinition,
-             .commitmentCreate, .commitmentComplete, .commitmentAbandon, .commitmentSnooze,
-             .domainCreate, .domainArchive, .domainUpdatePrompt,
+             .instrumentApplyEvent,
+             .domainCreate, .domainArchive,
              .memorySave, .memoryForget:
             return true
         case .calendarRead, .reminderList,
              .eventCapture, .eventList, .eventRecentSummary,
-             .instrumentList, .instrumentRead,
-             .commitmentList,
+             .instrumentCreate, .instrumentList, .instrumentRead,
+             .instrumentUpdateDefinition, .instrumentArchive,
+             .commitmentCreate, .commitmentComplete, .commitmentAbandon,
+             .commitmentSnooze, .commitmentList,
              .memorySearch, .memoryListRecent, .memoryStrengthen,
              .notificationListUpcoming,
              .csvMirrorEnsureInstrumentFile, .csvMirrorSyncNow, .csvMirrorReadOverrides,
-             .domainList,
+             .domainList, .domainUpdatePrompt,
              .agentHandoff, .agentCrossConsult,
              .mercyModeEngage, .pauseEngage, .quietHoursSet,
              .webSearch:

@@ -82,6 +82,14 @@ final class AppBootstrap: ObservableObject {
         Task.detached {
             _ = try? await AgentLoopHost.shared.ready()
         }
+        // One-shot memory-decay persistence pass on launch. BGTask refreshes
+        // are unreliable in the first install week (researcher landmine), so
+        // we also run on every cold start — detached + utility priority so
+        // it doesn't compete with first paint. Idempotent: the inner SQL
+        // skips rows whose `last_strength_update_at` already equals `now`.
+        Task.detached(priority: .utility) {
+            await BGTaskCoordinator.shared.runMemoryDecayPass()
+        }
     }
 }
 

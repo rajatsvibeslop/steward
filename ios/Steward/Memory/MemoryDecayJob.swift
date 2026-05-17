@@ -72,4 +72,27 @@ enum MemoryDecayJob {
         }
         return Outcome(scanned: rows.count, updated: updated, softDeleted: softDeleted)
     }
+
+    /// Periodic persistence pass. Single seam used by both the BGTask refresh
+    /// handler and the app-launch one-shot kick (BGTasks are unreliable in
+    /// the first install week — see Background/BGTaskCoordinator notes).
+    ///
+    /// Errors during the write are intentionally caught and reported via the
+    /// returned optional rather than rethrown: a transient DB hiccup must
+    /// not abort the BGTask refresh cycle that wraps this call.
+    /// `MemoryRetriever` applies the lazy decay at query time, so ranking
+    /// stays correct between passes; the next tick re-attempts persistence.
+    @discardableResult
+    static func runPersistencePass(
+        on queue: DatabaseQueue,
+        now: Date = Date()
+    ) async -> Outcome? {
+        do {
+            return try await queue.write { db in
+                try MemoryDecayJob.run(now: now, in: db)
+            }
+        } catch {
+            return nil
+        }
+    }
 }

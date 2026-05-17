@@ -115,14 +115,20 @@ actor BGTaskCoordinator {
         if let drainer = syncDrainer {
             await drainer()
         }
+        // Persist memory decay (addendum §1.5). MemoryRetriever already
+        // applies the lazy form at retrieval time so v1 ranking is correct
+        // without this — the pass exists to bump `strength_at_last_update`
+        // for indexed sort queries and to soft-delete rows that have fallen
+        // below the 0.05 threshold. Errors are swallowed inside the helper:
+        // a DB hiccup must not abort the surrounding BGTask refresh cycle.
+        await runMemoryDecayPass()
         scheduleNextRefresh()
         task.setTaskCompleted(success: !expirationFlag.isExpired)
     }
 
     private func handleProcessing(task: BGProcessingTask) async {
         // BGProcessingTask gets a few minutes when on charger / Wi-Fi. We
-        // use it for the same drain + top-up + memory decay (Track C may
-        // wire memory decay here later).
+        // use it for the same drain + top-up + memory decay persistence.
         let expirationFlag = ExpirationFlag()
         task.expirationHandler = { expirationFlag.markExpired() }
 
@@ -130,7 +136,27 @@ actor BGTaskCoordinator {
         if let drainer = syncDrainer {
             await drainer()
         }
+        await runMemoryDecayPass()
         task.setTaskCompleted(success: !expirationFlag.isExpired)
+    }
+
+    // MARK: - Decay
+
+    /// Resolve the shared writer and run a `MemoryDecayJob` persistence pass.
+    /// Internal seam — exposed (rather than inlined) so tests can drive the
+    /// same code path without instantiating a `BGAppRefreshTask` (a system
+    /// class that can't be constructed from test code). The helper returns
+    /// the run outcome (or `nil` if the DB was unavailable) for diagnostics;
+    /// callers in the handler path discard it intentionally.
+    @discardableResult
+    func runMemoryDecayPass(now: Date = Date()) async -> MemoryDecayJob.Outcome? {
+        guard let queue = try? await DatabaseProvider.shared.database() else {
+            // Intentional swallow: the DB-open path surfaces its own typed
+            // error to first-paint UI via AppBootstrap.Phase.failed. The
+            // periodic decay pass is best-effort and must not pile on.
+            return nil
+        }
+        return await MemoryDecayJob.runPersistencePass(on: queue, now: now)
     }
 }
 

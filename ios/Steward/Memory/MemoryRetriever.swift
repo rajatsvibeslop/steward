@@ -158,7 +158,7 @@ enum MemoryRetriever {
         domain: String?,
         types: [MemoryType]?,
         in db: Database
-    ) throws -> [String: Double] {
+    ) throws -> [MemoryID: Double] {
         let sanitized = ftsSanitize(query)
         if sanitized.isEmpty { return [:] }
         var sql = """
@@ -183,10 +183,11 @@ enum MemoryRetriever {
 
         // Invert bm25 (smaller is better in SQLite) → bigger is better.
         // We negate; the reranker normalizes against max.
-        var out: [String: Double] = [:]
+        var out: [MemoryID: Double] = [:]
         for row in rows {
             let bm: Double = row["bm"]
-            out[row["mid"]] = -bm  // invert so "better" → larger
+            let mid: MemoryID = row["mid"]
+            out[mid] = -bm  // invert so "better" → larger
         }
         return out
     }

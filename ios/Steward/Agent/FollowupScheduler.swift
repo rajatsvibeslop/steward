@@ -47,11 +47,15 @@ public struct OnboardingOutcome: Sendable, Equatable {
     }
 }
 
-public actor FollowupScheduler {
+/// Internal actor — only referenced from in-module call sites. We do not
+/// expose `public init` because the default `NotificationScheduler.shared`
+/// is internal; bumping the entire scheduler to public for one default
+/// argument isn't worth the surface area.
+actor FollowupScheduler {
     private let scheduler: NotificationScheduler
     private let clock: @Sendable () -> Date
 
-    public init(
+    init(
         scheduler: NotificationScheduler = .shared,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
@@ -62,7 +66,7 @@ public actor FollowupScheduler {
     /// Computes the fire time and schedules the followup. Body copy is
     /// rendered by `NotificationTemplate` from the `TemplateContext` we
     /// build here — no string composition in this file.
-    public func schedule(
+    func schedule(
         outcome: OnboardingOutcome,
         timezone: TimeZone = .autoupdatingCurrent
     ) async -> FollowupSchedulingOutcome {

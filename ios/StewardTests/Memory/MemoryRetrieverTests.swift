@@ -50,7 +50,7 @@ final class MemoryRetrieverTests: XCTestCase {
     ) -> MemoryItem {
         let now = Date().addingTimeInterval(-ageDays * 86_400)
         return MemoryItem(
-            memoryID: id,
+            memoryID: MemoryID(rawValue: id),
             type: type,
             text: text,
             embedding: normalize(embedding),

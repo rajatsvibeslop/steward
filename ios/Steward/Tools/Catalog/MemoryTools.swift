@@ -167,7 +167,7 @@ struct MemorySaveTool: LLMTool {
                 reason: "duplicate of \(existing) at cosine \(cosine)"
             ))
         case .admit, .admitWithContradiction:
-            let id = ULID.generate(now: timestamp)
+            let id = MemoryID(rawValue: ULID.generate(now: timestamp))
             let item = MemoryItem(
                 memoryID: id,
                 type: args.type,
@@ -193,9 +193,9 @@ struct MemorySaveTool: LLMTool {
                 let contradictions: [String]
             }
             let payload = SavePayload(
-                memoryID: id,
+                memoryID: id.rawValue,
                 type: args.type.rawValue,
-                contradictions: conflicts ?? []
+                contradictions: (conflicts ?? []).map(\.rawValue)
             )
             try await db.write { dbase in
                 try item.upsert(in: dbase)

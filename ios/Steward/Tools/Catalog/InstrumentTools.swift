@@ -88,7 +88,7 @@ struct InstrumentCreateTool: LLMTool {
         }
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
-        let instrumentID = ULID.generate(now: timestamp)
+        let instrumentID = InstrumentID(rawValue: ULID.generate(now: timestamp))
         let createdMs = Int64(timestamp.timeIntervalSince1970 * 1000)
 
         let initialState = try InstrumentRegistry.initialStateJSON(
@@ -380,7 +380,7 @@ struct InstrumentApplyEventTool: LLMTool {
         let args = try ToolJSON.decode(InstrumentApplyEventArgs.self, from: argsJSON)
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
-        let eventID = ULID.generate(now: timestamp)
+        let eventID = EventID(rawValue: ULID.generate(now: timestamp))
 
         // Build the InstrumentEvent envelope JSON the registry expects.
         // payload_json must already match the kind's EventPayload shape;
@@ -635,8 +635,8 @@ enum InstrumentTools {
         }
         let iso = ISO8601DateFormatter()
         let envelope: [String: Any] = [
-            "eventID": eventID,
-            "instrumentID": instrumentID,
+            "eventID": eventID.rawValue,
+            "instrumentID": instrumentID.rawValue,
             "kind": kind,
             "actor": actor,
             "createdAt": iso.string(from: createdAt),

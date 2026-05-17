@@ -10,22 +10,11 @@
 import Foundation
 
 // MARK: - Identifiers
-
-/// Opaque ULID-ish string identifier for one user-initiated turn. Generated
-/// in `AgentLoop.run(userMessage:)` from Date + a small random suffix; the
-/// production path is allowed to use random — only MockLLMSession's reply
-/// payloads must avoid non-determinism (§4 #21).
-public struct TurnID: Hashable, Sendable, Codable, CustomStringConvertible {
-    public let raw: String
-    public init(raw: String) { self.raw = raw }
-    public var description: String { raw }
-}
-
-public struct ActionID: Hashable, Sendable, Codable, CustomStringConvertible {
-    public let raw: String
-    public init(raw: String) { self.raw = raw }
-    public var description: String { raw }
-}
+//
+// `TurnID` and `ActionID` are declared in `Actions/TurnAction.swift`
+// (Pod D's strongly-typed structs). Pod B's earlier `init(raw:)` and
+// `.raw` API is preserved as an alias on the canonical structs so
+// existing AgentLoop call sites stay working.
 
 // MARK: - Roles
 
@@ -37,24 +26,9 @@ public enum AgentRole: Sendable, Equatable, Hashable {
     case domain(String) // domain identifier ("health", "money", ...)
 }
 
-/// Audit-log identity of who took a recorded action. Mirrors the
-/// `events.actor` column from spec §5 + addendum §4 #11.
-public enum ActorRef: Sendable, Equatable, Hashable, Codable {
-    case user
-    case system
-    case coordinator
-    case agent(domain: String)
-
-    /// String form for persistence (`events.actor` text column).
-    public var dbActor: String {
-        switch self {
-        case .user: return "user"
-        case .system: return "system"
-        case .coordinator: return "coordinator"
-        case .agent(let domain): return "agent:\(domain)"
-        }
-    }
-}
+/// `ActorRef` is declared in `Actions/TurnAction.swift` (Pod D's canonical
+/// definition). `ActorRef.dbValue` returns the same string vocabulary
+/// that Pod B's earlier `dbActor` did.
 
 // MARK: - Runtime context
 

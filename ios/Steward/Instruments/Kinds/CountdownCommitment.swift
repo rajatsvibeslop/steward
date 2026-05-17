@@ -150,7 +150,7 @@ enum CountdownCommitment: InstrumentKind {
         let iso = ISO8601DateFormatter()
         let rows: [[String]] = state.completedEvents.map { c in
             [
-                c.eventID,
+                c.eventID.rawValue,
                 "1",
                 iso.string(from: c.at),
                 iso.string(from: c.at),

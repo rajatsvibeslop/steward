@@ -15,46 +15,13 @@
 
 import Foundation
 
-// MARK: - agent.handoff (signature placeholder)
-
-struct AgentHandoffArgs: Codable, Equatable, Sendable {
-    let domain: String
-    let message: String
-    let reasoning: String
-}
-
-struct AgentHandoffPlaceholderResult: Codable, Equatable, Sendable {
-    let status: String       // always "delegated_to_loop"
-    let message: String      // explanatory
-}
-
-struct AgentHandoffTool: LLMTool {
-    let id: String = ToolID.agentHandoff.rawValue
-    let description: String = "Coordinator-only: delegate the current turn to a named domain agent. The agent loop owns dispatch."
-    let jsonSchemaForArgs: String = """
-    {
-      "type": "object",
-      "required": ["domain", "message", "reasoning"],
-      "properties": {
-        "domain": {"type": "string"},
-        "message": {"type": "string"},
-        "reasoning": {"type": "string"}
-      }
-    }
-    """
-
-    /// Placeholder implementation. Track B's AgentLoop intercepts
-    /// `agent.handoff` calls BEFORE dispatching to a tool handler — this
-    /// invoke() should never run in production. If it does, surface a
-    /// typed error so we get a loud signal during integration.
-    func invoke(argsJSON: String) async throws -> String {
-        _ = try ToolJSON.decode(AgentHandoffArgs.self, from: argsJSON)
-        throw LLMToolError(
-            code: "handoff_not_intercepted",
-            message: "agent.handoff was dispatched as a leaf tool — AgentLoop should have caught it. This indicates a wiring bug in Track B."
-        )
-    }
-}
+// MARK: - agent.handoff
+//
+// The canonical `AgentHandoffTool` lives in `Agent/AgentLoop.swift` (Pod B).
+// Pod B's AgentLoop registers it when building the coordinator's tool list
+// with all the runtime dependencies it needs (budget, resolver, registry,
+// factory, temperature, timezone, clock). `ToolCatalog.allTrackCTools()`
+// no longer registers a placeholder here — registration is Pod B's job.
 
 // MARK: - agent.cross_consult (signature placeholder)
 

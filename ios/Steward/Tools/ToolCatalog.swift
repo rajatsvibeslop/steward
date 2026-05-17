@@ -49,8 +49,9 @@ enum ToolCatalog {
             DomainListTool(provider: provider),
             DomainUpdatePromptTool(provider: provider, now: now),
             DomainArchiveTool(provider: provider, now: now),
-            // Cross-agent (signatures only; Pod B overrides at runtime)
-            AgentHandoffTool(),
+            // Cross-agent (Pod B registers `AgentHandoffTool` itself with
+            // its runtime deps when building the coordinator tool list; we
+            // only contribute `cross_consult`, which is a true leaf tool).
             AgentCrossConsultTool(),
             // Settings + safety
             MercyModeEngageTool(provider: provider, settings: settings, now: now),

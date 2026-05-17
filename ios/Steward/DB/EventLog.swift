@@ -86,7 +86,7 @@ enum EventLog {
         source: String? = nil,
         reasoning: String? = nil,
         at now: Date = Date(),
-        eventID: EventID = ULID.generate(),
+        eventID: EventID = EventID(rawValue: ULID.generate()),
         in db: Database
     ) throws -> EventID {
         if actor.requiresReasoning, (reasoning ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -132,7 +132,7 @@ enum EventLog {
         source: String? = nil,
         reasoning: String? = nil,
         at now: Date = Date(),
-        eventID: EventID = ULID.generate(),
+        eventID: EventID = EventID(rawValue: ULID.generate()),
         in db: Database
     ) throws -> EventID {
         let encoder = JSONEncoder()

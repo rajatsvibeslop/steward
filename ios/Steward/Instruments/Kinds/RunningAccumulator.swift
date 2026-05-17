@@ -140,7 +140,7 @@ enum RunningAccumulator: InstrumentKind {
         let iso = ISO8601DateFormatter()
         let rows: [[String]] = recentEvents.map { ev in
             [
-                ev.eventID,
+                ev.eventID.rawValue,
                 "1",
                 iso.string(from: ev.createdAt),
                 iso.string(from: ev.createdAt),

@@ -488,11 +488,23 @@ struct MemoryStrengthenTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
+    }
+
+    /// Snapshot of the strength columns memory.strengthen mutates, captured
+    /// BEFORE the bump so undo can replay the exact prior state instead of
+    /// guessing "current - 0.20" (which is wrong once the +0.20 hits the
+    /// MIN(1.0, ...) cap).
+    private struct PriorStrength {
+        let strength: Double
+        let lastStrengthUpdateAt: Date
     }
 
     func invoke(argsJSON: String) async throws -> String {
@@ -500,7 +512,21 @@ struct MemoryStrengthenTool: LLMTool {
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
         let db = try await provider.database()
-        try await db.write { dbase in
+        let prior: PriorStrength = try await db.write { dbase in
+            guard let row = try Row.fetchOne(
+                dbase,
+                sql: "SELECT strength_at_last_update, last_strength_update_at FROM memory_items WHERE memory_id = ?",
+                arguments: [args.memoryID]
+            ) else {
+                throw LLMToolError(
+                    code: "memory_not_found",
+                    message: "no memory with id='\(args.memoryID.rawValue)'"
+                )
+            }
+            let snapshot = PriorStrength(
+                strength: row["strength_at_last_update"],
+                lastStrengthUpdateAt: Date(timeIntervalSince1970: Double(row["last_strength_update_at"] as Int64) / 1000)
+            )
             try MemoryItem.recordConfirmation(memoryID: args.memoryID, now: timestamp, in: dbase)
             try EventLog.append(
                 actor: actor,
@@ -511,7 +537,33 @@ struct MemoryStrengthenTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return snapshot
         }
+
+        // Track-D parity audit row + undo handle. Inverse restores the
+        // exact prior strength + last_strength_update_at so the lazy decay
+        // formula picks up where it left off (not "undo time" as anchor).
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .memoryStrengthen,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .weakenMemory(
+                memoryID: args.memoryID,
+                priorStrength: prior.strength,
+                priorLastStrengthUpdateAt: prior.lastStrengthUpdateAt
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                source: "tool:memory.strengthen"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(MemoryStrengthenResult(memoryID: args.memoryID, strengthenedAt: timestamp))
     }
 }

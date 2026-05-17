@@ -70,11 +70,14 @@ struct InstrumentCreateTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
 
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -132,6 +135,28 @@ struct InstrumentCreateTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+        }
+
+        // Track-D parity audit row + undo handle. Inverse archives the
+        // freshly-created instrument so the agent surface stops listing it.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .instrumentCreate,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .archiveInstrument(instrumentID: instrumentID)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.name,
+                domain: args.domain,
+                instrumentID: instrumentID.rawValue,
+                source: "tool:instrument.create"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
         }
 
         return try ToolJSON.encode(InstrumentCreateResult(
@@ -507,11 +532,14 @@ struct InstrumentUpdateDefinitionTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
 
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -521,12 +549,15 @@ struct InstrumentUpdateDefinitionTool: LLMTool {
         let timestamp = now()
         let nowMs = Int64(timestamp.timeIntervalSince1970 * 1000)
         let db = try await provider.database()
-        try await db.write { dbase in
-            guard try Int.fetchOne(
+        // Capture the prior definition JSON BEFORE the UPDATE so undo can
+        // restore the exact pre-edit state. Captured inside the same write
+        // txn so a concurrent update can't slip between read and write.
+        let priorDefinitionJSON: String = try await db.write { dbase in
+            guard let prior = try String.fetchOne(
                 dbase,
-                sql: "SELECT COUNT(*) FROM instruments WHERE instrument_id = ?",
+                sql: "SELECT definition_json FROM instruments WHERE instrument_id = ?",
                 arguments: [args.instrumentID]
-            ) == 1 else {
+            ) else {
                 throw LLMToolError(
                     code: "instrument_not_found",
                     message: "no instrument with id='\(args.instrumentID)'"
@@ -550,7 +581,32 @@ struct InstrumentUpdateDefinitionTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return prior
         }
+
+        // Track-D parity audit row + undo handle. Inverse restores the
+        // pre-update definition JSON we captured above.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .instrumentUpdateDefinition,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .restoreInstrumentDefinition(
+                instrumentID: args.instrumentID,
+                priorDefinitionJSON: priorDefinitionJSON
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                instrumentID: args.instrumentID.rawValue,
+                source: "tool:instrument.update_definition"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(InstrumentUpdateDefinitionResult(
             instrumentID: args.instrumentID,
             updatedAt: timestamp
@@ -601,11 +657,14 @@ struct InstrumentArchiveTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
 
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -635,6 +694,27 @@ struct InstrumentArchiveTool: LLMTool {
                 in: dbase
             )
         }
+
+        // Track-D parity audit row + undo handle. Inverse clears archived_at.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .instrumentArchive,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .unarchiveInstrument(instrumentID: args.instrumentID)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.reason,
+                instrumentID: args.instrumentID.rawValue,
+                source: "tool:instrument.archive"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(InstrumentArchiveResult(
             instrumentID: args.instrumentID,
             archivedAt: timestamp

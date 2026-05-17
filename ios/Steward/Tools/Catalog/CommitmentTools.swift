@@ -72,10 +72,13 @@ struct CommitmentCreateTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -118,6 +121,29 @@ struct CommitmentCreateTool: LLMTool {
                 in: dbase
             )
         }
+
+        // Track-D parity audit row + undo handle. Inverse DELETEs the row;
+        // commitments are not append-only so deletion is safe.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .commitmentCreate,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .deleteCommitment(commitmentID: id)
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.title,
+                domain: args.domain,
+                commitmentID: id.rawValue,
+                source: "tool:commitment.create"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(CommitmentCreateResult(commitmentID: id, createdAt: timestamp))
     }
 }
@@ -227,6 +253,43 @@ struct CommitmentListTool: LLMTool {
 // MARK: - Shared transition helper
 
 enum CommitmentTools {
+    /// Snapshot of the row fields a status-transition undo needs to replay.
+    /// Captured BEFORE the mutation so the undo writes a real prior state
+    /// (not a guess). Thrown rather than nil-returning so a missing row
+    /// surfaces as a typed tool error instead of a silent no-op.
+    struct PriorTransitionState {
+        let status: CommitmentStatus
+        let dueAt: Date?
+        let completedAt: Date?
+    }
+
+    static func capturePriorState(
+        commitmentID: CommitmentID,
+        in db: Database
+    ) throws -> PriorTransitionState {
+        guard let row = try Row.fetchOne(
+            db,
+            sql: "SELECT status, due_at, completed_at FROM commitments WHERE commitment_id = ?",
+            arguments: [commitmentID]
+        ) else {
+            throw LLMToolError(
+                code: "commitment_not_found",
+                message: "no commitment with id='\(commitmentID.rawValue)'"
+            )
+        }
+        guard let status = CommitmentStatus(rawValue: row["status"]) else {
+            throw LLMToolError(
+                code: "corrupt_commitment_status",
+                message: "commitment \(commitmentID.rawValue): status='\(row["status"] as String)' invalid"
+            )
+        }
+        return PriorTransitionState(
+            status: status,
+            dueAt: (row["due_at"] as Int64?).map { Date(timeIntervalSince1970: Double($0) / 1000) },
+            completedAt: (row["completed_at"] as Int64?).map { Date(timeIntervalSince1970: Double($0) / 1000) }
+        )
+    }
+
     static func transition(
         commitmentID: CommitmentID,
         to status: CommitmentStatus,
@@ -293,10 +356,13 @@ struct CommitmentCompleteTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -305,7 +371,11 @@ struct CommitmentCompleteTool: LLMTool {
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
         let db = try await provider.database()
-        try await db.write { dbase in
+        let prior: CommitmentTools.PriorTransitionState = try await db.write { dbase in
+            let snapshot = try CommitmentTools.capturePriorState(
+                commitmentID: args.commitmentID,
+                in: dbase
+            )
             try CommitmentTools.transition(
                 commitmentID: args.commitmentID,
                 to: .done,
@@ -322,7 +392,35 @@ struct CommitmentCompleteTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return snapshot
         }
+
+        // Track-D parity audit row + undo handle. Inverse replays the
+        // captured prior status / due_at / completed_at.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .commitmentComplete,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .restoreCommitmentStatus(
+                commitmentID: args.commitmentID,
+                priorStatus: prior.status,
+                priorDueAt: prior.dueAt,
+                priorCompletedAt: prior.completedAt
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.notes,
+                commitmentID: args.commitmentID.rawValue,
+                source: "tool:commitment.complete"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(CommitmentTransitionResult(
             commitmentID: args.commitmentID,
             status: .done,
@@ -364,10 +462,13 @@ struct CommitmentAbandonTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -376,7 +477,11 @@ struct CommitmentAbandonTool: LLMTool {
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
         let db = try await provider.database()
-        try await db.write { dbase in
+        let prior: CommitmentTools.PriorTransitionState = try await db.write { dbase in
+            let snapshot = try CommitmentTools.capturePriorState(
+                commitmentID: args.commitmentID,
+                in: dbase
+            )
             try CommitmentTools.transition(
                 commitmentID: args.commitmentID,
                 to: .abandoned,
@@ -393,7 +498,34 @@ struct CommitmentAbandonTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return snapshot
         }
+
+        // Track-D parity audit row + undo handle (shared restore handler).
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .commitmentAbandon,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .restoreCommitmentStatus(
+                commitmentID: args.commitmentID,
+                priorStatus: prior.status,
+                priorDueAt: prior.dueAt,
+                priorCompletedAt: prior.completedAt
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                text: args.reason,
+                commitmentID: args.commitmentID.rawValue,
+                source: "tool:commitment.abandon"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(CommitmentTransitionResult(
             commitmentID: args.commitmentID,
             status: .abandoned,
@@ -435,10 +567,13 @@ struct CommitmentSnoozeTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -448,7 +583,11 @@ struct CommitmentSnoozeTool: LLMTool {
         let timestamp = now()
         let untilMs = Int64(args.until.timeIntervalSince1970 * 1000)
         let db = try await provider.database()
-        try await db.write { dbase in
+        let prior: CommitmentTools.PriorTransitionState = try await db.write { dbase in
+            let snapshot = try CommitmentTools.capturePriorState(
+                commitmentID: args.commitmentID,
+                in: dbase
+            )
             try dbase.execute(
                 sql: """
                     UPDATE commitments
@@ -467,7 +606,34 @@ struct CommitmentSnoozeTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return snapshot
         }
+
+        // Track-D parity audit row + undo handle. Inverse restores prior
+        // status AND due_at (snooze mutates both).
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .commitmentSnooze,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .restoreCommitmentStatus(
+                commitmentID: args.commitmentID,
+                priorStatus: prior.status,
+                priorDueAt: prior.dueAt,
+                priorCompletedAt: prior.completedAt
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                commitmentID: args.commitmentID.rawValue,
+                source: "tool:commitment.snooze"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(CommitmentTransitionResult(
             commitmentID: args.commitmentID,
             status: .snoozed,

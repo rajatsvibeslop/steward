@@ -274,10 +274,13 @@ struct DomainUpdatePromptTool: LLMTool {
     """
 
     let provider: DatabaseProvider
+    let auditLog: AuditLog
     let now: @Sendable () -> Date
     init(provider: DatabaseProvider = .shared,
+         auditLog: AuditLog = .shared,
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.provider = provider
+        self.auditLog = auditLog
         self.now = now
     }
 
@@ -286,7 +289,19 @@ struct DomainUpdatePromptTool: LLMTool {
         let actor = try EventTools.parseActor(args.actor)
         let timestamp = now()
         let db = try await provider.database()
-        try await db.write { dbase in
+        // Capture the prior role_prompt BEFORE the UPDATE so undo can
+        // restore the exact pre-edit string.
+        let priorRolePrompt: String = try await db.write { dbase in
+            guard let prior = try String.fetchOne(
+                dbase,
+                sql: "SELECT role_prompt FROM domains WHERE domain = ?",
+                arguments: [args.domain]
+            ) else {
+                throw LLMToolError(
+                    code: "domain_not_found",
+                    message: "no domain with id='\(args.domain)'"
+                )
+            }
             try dbase.execute(
                 sql: "UPDATE domains SET role_prompt = ? WHERE domain = ?",
                 arguments: [args.newRolePrompt, args.domain]
@@ -301,7 +316,32 @@ struct DomainUpdatePromptTool: LLMTool {
                 at: timestamp,
                 in: dbase
             )
+            return prior
         }
+
+        // Track-D parity audit row + undo handle. Inverse writes the
+        // captured prior role_prompt back.
+        let action = TurnAction(
+            turnID: TurnID.generate(),
+            toolID: .domainUpdatePrompt,
+            actor: ActorRef.from(actor),
+            executedAt: timestamp,
+            reasoning: args.reasoning,
+            inverse: .restoreDomainPrompt(
+                domain: args.domain,
+                priorRolePrompt: priorRolePrompt
+            )
+        )
+        do {
+            _ = try await auditLog.recordAgentAction(
+                action,
+                domain: args.domain,
+                source: "tool:domain.update_prompt"
+            )
+        } catch {
+            // Audit failure mustn't fail the primary tool result.
+        }
+
         return try ToolJSON.encode(DomainUpdatePromptResult(domain: args.domain, updatedAt: timestamp))
     }
 }

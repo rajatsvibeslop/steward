@@ -42,9 +42,28 @@ final class UndoExecutorTests: XCTestCase {
             .archiveDomain(domain: "health", archivedAt: Date()),
             .unarchiveDomain(domain: "health"),
             .forgetMemory(memoryID: MemoryID(rawValue: "m-1")),
-            .unforgetMemory(memoryID: MemoryID(rawValue: "m-1"))
+            .unforgetMemory(memoryID: MemoryID(rawValue: "m-1")),
+            .archiveInstrument(instrumentID: InstrumentID(rawValue: "inst-1")),
+            .unarchiveInstrument(instrumentID: InstrumentID(rawValue: "inst-1")),
+            .restoreInstrumentDefinition(
+                instrumentID: InstrumentID(rawValue: "inst-1"),
+                priorDefinitionJSON: "{}"
+            ),
+            .deleteCommitment(commitmentID: CommitmentID(rawValue: "c-1")),
+            .restoreCommitmentStatus(
+                commitmentID: CommitmentID(rawValue: "c-1"),
+                priorStatus: .active,
+                priorDueAt: nil,
+                priorCompletedAt: nil
+            ),
+            .weakenMemory(
+                memoryID: MemoryID(rawValue: "m-1"),
+                priorStrength: 0.5,
+                priorLastStrengthUpdateAt: Date()
+            ),
+            .restoreDomainPrompt(domain: "health", priorRolePrompt: "old prompt")
         ]
-        XCTAssertEqual(cases.count, 13, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
+        XCTAssertEqual(cases.count, 20, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
 
         // Parity: every InverseAction must map to an InverseActionKind. If
         // someone adds a case to one enum but forgets the other, the
@@ -491,6 +510,428 @@ final class UndoExecutorTests: XCTestCase {
         } else {
             XCTFail("inverse must be .archiveDomain")
         }
+    }
+
+    // MARK: - v1.1 patch: round-trips for the newly-reversible 7 cases
+
+    /// Insert a minimal instrument row so undo handlers have something to
+    /// mutate. Returns the row's ID.
+    private func seedInstrument(
+        provider: DatabaseProvider,
+        instrumentID: InstrumentID = InstrumentID(rawValue: "inst-seed-\(UUID().uuidString)"),
+        definitionJSON: String = "{\"items\":[]}"
+    ) async throws -> InstrumentID {
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO instruments
+                      (instrument_id, domain, kind, name, definition_json, state_json,
+                       state_version, created_at, last_updated_at)
+                    VALUES (?, 'health', 'checklist', 'seed', ?, '{}', 1, ?, ?)
+                """,
+                arguments: [instrumentID, definitionJSON, nowMs, nowMs]
+            )
+        }
+        return instrumentID
+    }
+
+    private func seedCommitment(
+        provider: DatabaseProvider,
+        commitmentID: CommitmentID = CommitmentID(rawValue: "c-seed-\(UUID().uuidString)"),
+        status: CommitmentStatus = .active,
+        dueAt: Date? = nil,
+        completedAt: Date? = nil
+    ) async throws -> CommitmentID {
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let dueMs: Int64? = dueAt.map { Int64($0.timeIntervalSince1970 * 1000) }
+        let completedMs: Int64? = completedAt.map { Int64($0.timeIntervalSince1970 * 1000) }
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO commitments
+                      (commitment_id, title, status, due_at, domain, importance, created_at, completed_at)
+                    VALUES (?, 'seed', ?, ?, 'health', 'medium', ?, ?)
+                """,
+                arguments: [commitmentID, status.rawValue, dueMs, nowMs, completedMs]
+            )
+        }
+        return commitmentID
+    }
+
+    private func seedDomain(
+        provider: DatabaseProvider,
+        domain: String,
+        rolePrompt: String = "original prompt"
+    ) async throws {
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO domains
+                      (domain, display_name, role_prompt, tool_scope_json, created_at)
+                    VALUES (?, ?, ?, '{}', ?)
+                """,
+                arguments: [domain, domain.capitalized, rolePrompt, nowMs]
+            )
+        }
+    }
+
+    func testArchiveInstrumentRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let id = try await seedInstrument(provider: provider)
+        let executor = makeExecutor(provider: provider)
+
+        // Apply archive → expect archived_at set.
+        try await executor.execute(.archiveInstrument(instrumentID: id))
+        let afterArchive: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
+                arguments: [id]
+            )
+        }
+        XCTAssertNotNil(afterArchive, "archiveInstrument should set archived_at")
+
+        // Apply unarchive → expect cleared.
+        try await executor.execute(.unarchiveInstrument(instrumentID: id))
+        let afterUnarchive: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
+                arguments: [id]
+            )
+        }
+        XCTAssertNil(afterUnarchive, "unarchiveInstrument should clear archived_at")
+    }
+
+    func testArchiveInstrumentMissingRowThrows() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(
+                .archiveInstrument(instrumentID: InstrumentID(rawValue: "ghost"))
+            )
+            XCTFail("expected backendFailure for missing instrument row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    func testRestoreInstrumentDefinitionRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let original = "{\"items\":[{\"id\":\"a\",\"label\":\"original\"}]}"
+        let id = try await seedInstrument(provider: provider, definitionJSON: original)
+        // Mutate the definition to simulate the update tool having run.
+        try await queue.write { db in
+            try db.execute(
+                sql: "UPDATE instruments SET definition_json = ? WHERE instrument_id = ?",
+                arguments: ["{\"items\":[]}", id]
+            )
+        }
+
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.restoreInstrumentDefinition(
+            instrumentID: id,
+            priorDefinitionJSON: original
+        ))
+        let restored: String? = try await queue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT definition_json FROM instruments WHERE instrument_id = ?",
+                arguments: [id]
+            )
+        }
+        XCTAssertEqual(restored, original)
+    }
+
+    func testDeleteCommitmentRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let id = try await seedCommitment(provider: provider)
+        let executor = makeExecutor(provider: provider)
+
+        try await executor.execute(.deleteCommitment(commitmentID: id))
+        let count: Int = try await queue.read { db in
+            try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM commitments WHERE commitment_id = ?",
+                arguments: [id]
+            ) ?? -1
+        }
+        XCTAssertEqual(count, 0, "deleteCommitment should remove the row")
+    }
+
+    func testDeleteCommitmentMissingRowThrows() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(
+                .deleteCommitment(commitmentID: CommitmentID(rawValue: "ghost"))
+            )
+            XCTFail("expected backendFailure for missing commitment row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    func testRestoreCommitmentStatusRoundTripForComplete() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        // Seed as "done" with completed_at, simulating post-complete state.
+        let dueAt = Date().addingTimeInterval(86_400)
+        let id = try await seedCommitment(
+            provider: provider, status: .done, dueAt: dueAt, completedAt: Date()
+        )
+
+        // Undo back to .active with no completed_at.
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.restoreCommitmentStatus(
+            commitmentID: id,
+            priorStatus: .active,
+            priorDueAt: dueAt,
+            priorCompletedAt: nil
+        ))
+        let row = try await queue.read { db -> Row in
+            try Row.fetchOne(
+                db,
+                sql: "SELECT status, due_at, completed_at FROM commitments WHERE commitment_id = ?",
+                arguments: [id]
+            )!
+        }
+        XCTAssertEqual(row["status"] as String, "active")
+        XCTAssertNotNil(row["due_at"] as Int64?)
+        XCTAssertNil(row["completed_at"] as Int64?)
+    }
+
+    func testRestoreCommitmentStatusRoundTripForSnooze() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        // Seed as "snoozed" with shifted due_at.
+        let originalDue = Date().addingTimeInterval(3600)
+        let id = try await seedCommitment(
+            provider: provider, status: .snoozed,
+            dueAt: Date().addingTimeInterval(86_400)
+        )
+
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.restoreCommitmentStatus(
+            commitmentID: id,
+            priorStatus: .active,
+            priorDueAt: originalDue,
+            priorCompletedAt: nil
+        ))
+        let row = try await queue.read { db -> Row in
+            try Row.fetchOne(
+                db,
+                sql: "SELECT status, due_at FROM commitments WHERE commitment_id = ?",
+                arguments: [id]
+            )!
+        }
+        XCTAssertEqual(row["status"] as String, "active")
+        let dueMs: Int64 = row["due_at"]
+        XCTAssertEqual(
+            dueMs,
+            Int64(originalDue.timeIntervalSince1970 * 1000),
+            "due_at must be restored to the captured prior value"
+        )
+    }
+
+    func testWeakenMemoryRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let mid = MemoryID(rawValue: "mem-weaken")
+        let blob = Data(repeating: 0, count: 32 * 4)
+        // Seed at strength 0.95 (post-strengthen).
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO memory_items
+                      (memory_id, type, text, embedding, embedding_dim, embedding_revision,
+                       strength_at_last_update, last_strength_update_at, created_at)
+                    VALUES (?, 'preference', 'x', ?, 32, 'rev', 0.95, ?, ?)
+                """,
+                arguments: [mid, blob, nowMs, nowMs]
+            )
+        }
+        let priorTime = Date().addingTimeInterval(-3600)
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.weakenMemory(
+            memoryID: mid, priorStrength: 0.75, priorLastStrengthUpdateAt: priorTime
+        ))
+        let row = try await queue.read { db -> Row in
+            try Row.fetchOne(
+                db,
+                sql: "SELECT strength_at_last_update, last_strength_update_at FROM memory_items WHERE memory_id = ?",
+                arguments: [mid]
+            )!
+        }
+        XCTAssertEqual(row["strength_at_last_update"] as Double, 0.75, accuracy: 0.0001)
+        XCTAssertEqual(
+            row["last_strength_update_at"] as Int64,
+            Int64(priorTime.timeIntervalSince1970 * 1000)
+        )
+    }
+
+    func testWeakenMemoryMissingRowThrows() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(.weakenMemory(
+                memoryID: MemoryID(rawValue: "ghost"),
+                priorStrength: 0.5,
+                priorLastStrengthUpdateAt: Date()
+            ))
+            XCTFail("expected backendFailure for missing memory row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    func testRestoreDomainPromptRoundTrip() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let queue = try await provider.database()
+        try await seedDomain(provider: provider, domain: "money", rolePrompt: "v1 prompt")
+        // Mutate to simulate post-update state.
+        try await queue.write { db in
+            try db.execute(
+                sql: "UPDATE domains SET role_prompt = 'v2 prompt' WHERE domain = ?",
+                arguments: ["money"]
+            )
+        }
+        let executor = makeExecutor(provider: provider)
+        try await executor.execute(.restoreDomainPrompt(
+            domain: "money", priorRolePrompt: "v1 prompt"
+        ))
+        let restored: String? = try await queue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT role_prompt FROM domains WHERE domain = ?",
+                arguments: ["money"]
+            )
+        }
+        XCTAssertEqual(restored, "v1 prompt")
+    }
+
+    func testRestoreDomainPromptMissingRowThrows() async throws {
+        let (_, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let executor = makeExecutor(provider: provider)
+        do {
+            try await executor.execute(.restoreDomainPrompt(
+                domain: "nope", priorRolePrompt: "x"
+            ))
+            XCTFail("expected backendFailure for missing domain row")
+        } catch let e as UndoExecutorError {
+            guard case .backendFailure = e else {
+                XCTFail("expected backendFailure, got \(e)")
+                return
+            }
+        }
+    }
+
+    // MARK: - End-to-end: tool → audit row → executor
+
+    func testInstrumentCreateToolPersistsTurnActionAndUndoArchives() async throws {
+        InstrumentRegistry._resetForTesting()
+        InstrumentRegistry.bootstrapAll()
+        let (audit, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let tool = InstrumentCreateTool(provider: provider, auditLog: audit)
+        let definitionJSON = "{\"items\":[{\"id\":\"a\",\"label\":\"walks\"}]}"
+        let argsJSON = """
+        {"kind":"checklist","name":"walks","domain":"health","definition_json":\(encodeAsJSONStringLiteral(definitionJSON)),"reasoning":"user asked","actor":"coordinator"}
+        """
+        _ = try await tool.invoke(argsJSON: argsJSON)
+        let queue = try await provider.database()
+        let eventID: String? = try await queue.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT event_id FROM events WHERE kind = ? ORDER BY created_at DESC LIMIT 1",
+                arguments: [ToolID.instrumentCreate.rawValue]
+            )
+        }
+        XCTAssertNotNil(eventID, "instrument.create must persist a kind='instrument.create' audit row")
+        let loaded = try await audit.loadTurnAction(eventID: EventID(rawValue: eventID!))
+        guard case .archiveInstrument(let archivedID) = loaded?.inverse else {
+            XCTFail("inverse must be .archiveInstrument")
+            return
+        }
+        // Run the undo and verify archived_at flips.
+        let executor = UndoExecutor(provider: provider, auditLog: audit)
+        try await executor.execute(.archiveInstrument(instrumentID: archivedID))
+        let archived: Int64? = try await queue.read { db in
+            try Int64.fetchOne(
+                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
+                arguments: [archivedID]
+            )
+        }
+        XCTAssertNotNil(archived, "undo should archive the freshly-created instrument")
+    }
+
+    func testCommitmentCompleteToolPersistsTurnActionAndUndoRestores() async throws {
+        let (audit, provider, dir) = try await makeAuditLog()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let id = try await seedCommitment(provider: provider, status: .active)
+        let tool = CommitmentCompleteTool(provider: provider, auditLog: audit)
+        let argsJSON = """
+        {"commitment_id":"\(id.rawValue)","reasoning":"user said done","actor":"coordinator"}
+        """
+        _ = try await tool.invoke(argsJSON: argsJSON)
+        let queue = try await provider.database()
+        let eventID: String? = try await queue.read { db in
+            try String.fetchOne(
+                db,
+                sql: "SELECT event_id FROM events WHERE kind = ? ORDER BY created_at DESC LIMIT 1",
+                arguments: [ToolID.commitmentComplete.rawValue]
+            )
+        }
+        XCTAssertNotNil(eventID, "commitment.complete must persist audit row")
+        let loaded = try await audit.loadTurnAction(eventID: EventID(rawValue: eventID!))
+        guard case .restoreCommitmentStatus(_, let priorStatus, _, _) = loaded?.inverse else {
+            XCTFail("inverse must be .restoreCommitmentStatus")
+            return
+        }
+        XCTAssertEqual(priorStatus, .active, "captured prior status must be .active")
+
+        // Run the undo via executor and verify row state.
+        let executor = UndoExecutor(provider: provider, auditLog: audit)
+        try await executor.execute(loaded!.inverse)
+        let status: String? = try await queue.read { db in
+            try String.fetchOne(
+                db, sql: "SELECT status FROM commitments WHERE commitment_id = ?",
+                arguments: [id]
+            )
+        }
+        XCTAssertEqual(status, "active")
+    }
+
+    /// Helper: encode an arbitrary string as a JSON string literal (escapes
+    /// quotes / backslashes). Used to splice definition_json into a tool args
+    /// envelope without hand-rolling escaping.
+    private func encodeAsJSONStringLiteral(_ s: String) -> String {
+        let data = try! JSONEncoder().encode(s)
+        return String(data: data, encoding: .utf8) ?? "\"\""
     }
 
     func testEventsCheckConstraintRejectsAgentRowWithoutReasoningAtDB() async throws {

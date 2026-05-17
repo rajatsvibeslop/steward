@@ -420,6 +420,46 @@ enum InverseAction: Codable, Sendable, Equatable {
 
     /// Undo a `memory.save` — re-soft-delete the memory.
     case unforgetMemory(memoryID: MemoryID)
+
+    /// Undo an `instrument.create` — hide the freshly-created row by setting
+    /// `archived_at`. We don't DELETE because event rows may already
+    /// reference the instrument_id; the same archived-row hides it from the
+    /// agent surface (instrument.list filters `archived_at IS NULL`).
+    case archiveInstrument(instrumentID: InstrumentID)
+
+    /// Undo an `instrument.archive` — clear `archived_at`.
+    case unarchiveInstrument(instrumentID: InstrumentID)
+
+    /// Undo an `instrument.update_definition` — restore the pre-update
+    /// definition JSON captured at write time.
+    case restoreInstrumentDefinition(instrumentID: InstrumentID, priorDefinitionJSON: String)
+
+    /// Undo a `commitment.create` — DELETE the row. Commitments are not
+    /// append-only (unlike events / memory_items) so deletion is safe; the
+    /// only outbound reference is `ek_reminder_id`, which Pod D mirrors
+    /// independently via its own undo handlers.
+    case deleteCommitment(commitmentID: CommitmentID)
+
+    /// Undo a `commitment.complete` / `commitment.abandon` / `commitment.snooze`
+    /// — restore the row's prior status, completed_at, and due_at. Captured
+    /// at write time so the undo replays a real state snapshot, not a guess.
+    case restoreCommitmentStatus(
+        commitmentID: CommitmentID,
+        priorStatus: CommitmentStatus,
+        priorDueAt: Date?,
+        priorCompletedAt: Date?
+    )
+
+    /// Undo a `memory.strengthen` — restore the pre-bump strength and
+    /// `last_strength_update_at` so the lazy decay formula stays consistent.
+    case weakenMemory(
+        memoryID: MemoryID,
+        priorStrength: Double,
+        priorLastStrengthUpdateAt: Date
+    )
+
+    /// Undo a `domain.update_prompt` — restore the pre-update role_prompt.
+    case restoreDomainPrompt(domain: String, priorRolePrompt: String)
 }
 
 // MARK: - TurnAction
@@ -490,24 +530,38 @@ enum InverseActionKind: String, Codable, Sendable, CaseIterable {
     case unarchiveDomain
     case forgetMemory
     case unforgetMemory
+    case archiveInstrument
+    case unarchiveInstrument
+    case restoreInstrumentDefinition
+    case deleteCommitment
+    case restoreCommitmentStatus
+    case weakenMemory
+    case restoreDomainPrompt
 }
 
 extension InverseAction {
     var kind: InverseActionKind {
         switch self {
-        case .restoreCalendarEvent:    return .restoreCalendarEvent
-        case .deleteCalendarEvent:     return .deleteCalendarEvent
-        case .modifyCalendarEvent:     return .modifyCalendarEvent
-        case .recreateReminder:        return .recreateReminder
-        case .deleteReminder:          return .deleteReminder
-        case .rescheduleNotification:  return .rescheduleNotification
-        case .cancelNotification:      return .cancelNotification
-        case .cancelRecurringRule:     return .cancelRecurringRule
-        case .revertInstrumentEvent:   return .revertInstrumentEvent
-        case .archiveDomain:           return .archiveDomain
-        case .unarchiveDomain:         return .unarchiveDomain
-        case .forgetMemory:            return .forgetMemory
-        case .unforgetMemory:          return .unforgetMemory
+        case .restoreCalendarEvent:        return .restoreCalendarEvent
+        case .deleteCalendarEvent:         return .deleteCalendarEvent
+        case .modifyCalendarEvent:         return .modifyCalendarEvent
+        case .recreateReminder:            return .recreateReminder
+        case .deleteReminder:              return .deleteReminder
+        case .rescheduleNotification:      return .rescheduleNotification
+        case .cancelNotification:          return .cancelNotification
+        case .cancelRecurringRule:         return .cancelRecurringRule
+        case .revertInstrumentEvent:       return .revertInstrumentEvent
+        case .archiveDomain:               return .archiveDomain
+        case .unarchiveDomain:             return .unarchiveDomain
+        case .forgetMemory:                return .forgetMemory
+        case .unforgetMemory:              return .unforgetMemory
+        case .archiveInstrument:           return .archiveInstrument
+        case .unarchiveInstrument:         return .unarchiveInstrument
+        case .restoreInstrumentDefinition: return .restoreInstrumentDefinition
+        case .deleteCommitment:            return .deleteCommitment
+        case .restoreCommitmentStatus:     return .restoreCommitmentStatus
+        case .weakenMemory:                return .weakenMemory
+        case .restoreDomainPrompt:         return .restoreDomainPrompt
         }
     }
 }

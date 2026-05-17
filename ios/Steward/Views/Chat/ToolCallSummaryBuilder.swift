@@ -167,31 +167,29 @@ enum ToolCallSummaryBuilder {
         // (§4 hard reject #9).
     }
 
-    /// Reversibility per Designer §1.3 list, constrained by Pod C's
-    /// implemented inverses. The full Designer list included tools whose
-    /// inverses don't (yet) live in `InverseAction`; rendering Undo for
-    /// them would surface qa-1's "Nothing to undo" — instead we only mark
-    /// reversible the tools whose audit row carries a real, executable
-    /// `InverseAction` and whose `UndoExecutor` handler is implemented.
+    /// Reversibility per Designer §1.3 list. v1.1 extended coverage to all
+    /// mutating Pod C tools; the only excluded Pod C kind is `event.capture`,
+    /// which is append-only by design (events table forbids DELETE — hard
+    /// reject #10) and so has no inverse.
     private static func isReversible(_ toolID: ToolID) -> Bool {
         switch toolID {
         case .calendarWrite, .calendarModify, .calendarDelete,
              .reminderCreate, .reminderComplete,
              .notificationSchedule, .notificationScheduleRecurring, .notificationCancel,
-             .instrumentApplyEvent,
-             .domainCreate, .domainArchive,
-             .memorySave, .memoryForget:
+             .instrumentCreate, .instrumentApplyEvent,
+             .instrumentUpdateDefinition, .instrumentArchive,
+             .commitmentCreate, .commitmentComplete, .commitmentAbandon, .commitmentSnooze,
+             .domainCreate, .domainUpdatePrompt, .domainArchive,
+             .memorySave, .memoryForget, .memoryStrengthen:
             return true
         case .calendarRead, .reminderList,
              .eventCapture, .eventList, .eventRecentSummary,
-             .instrumentCreate, .instrumentList, .instrumentRead,
-             .instrumentUpdateDefinition, .instrumentArchive,
-             .commitmentCreate, .commitmentComplete, .commitmentAbandon,
-             .commitmentSnooze, .commitmentList,
-             .memorySearch, .memoryListRecent, .memoryStrengthen,
+             .instrumentList, .instrumentRead,
+             .commitmentList,
+             .memorySearch, .memoryListRecent,
              .notificationListUpcoming,
              .csvMirrorEnsureInstrumentFile, .csvMirrorSyncNow, .csvMirrorReadOverrides,
-             .domainList, .domainUpdatePrompt,
+             .domainList,
              .agentHandoff, .agentCrossConsult,
              .mercyModeEngage, .pauseEngage, .quietHoursSet,
              .webSearch:

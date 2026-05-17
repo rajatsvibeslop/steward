@@ -205,6 +205,13 @@ actor NotificationScheduler {
         content.body = rendered.body
         // userInfo carries the action_context so the tap handler can resolve
         // a one-turn coordinator response on open (spec §10 #4 tap-to-act).
+        // We layer in two distinct namespaces:
+        //   1. The agent-supplied `actionContextJSON` (freeform dict the
+        //      LLM tools may populate via `notification.schedule(...)`).
+        //   2. The typed `NotificationActionContext` we derive from the
+        //      request itself — this is the canonical payload the router
+        //      reads on tap. Stamped under a distinct key so it can never
+        //      collide with whatever the agent put in.
         if let ctx = req.actionContextJSON, let data = ctx.data(using: .utf8),
            let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         {
@@ -212,6 +219,9 @@ actor NotificationScheduler {
         }
         content.userInfo["steward_notification_kind"] = req.kind.rawValue
         content.userInfo["steward_notification_id"] = unRequestID
+        if let typedJSON = NotificationActionContext.from(request: req).encodedJSONString() {
+            content.userInfo[NotificationActionContext.userInfoKey] = typedJSON
+        }
 
         let trigger = UNTimeIntervalNotificationTrigger(
             timeInterval: max(1, req.fireAt.timeIntervalSince(now)),

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 @main
 struct StewardApp: App {
@@ -18,6 +19,11 @@ struct StewardApp: App {
         // App.init runs at that point, so we register here. Registering
         // twice raises an Objective-C exception — keep this the single site.
         BGTaskCoordinator.registerHandlers()
+        // Install the tap-to-act router (spec §10 #4). Without this, taps
+        // on wind-down nudges / morning briefs cold-launch the app to the
+        // chat root and the stamped action_context_json is dropped — same
+        // as opening Steward from Springboard.
+        UNUserNotificationCenter.current().delegate = NotificationActionRouter.shared
     }
 
     var body: some Scene {

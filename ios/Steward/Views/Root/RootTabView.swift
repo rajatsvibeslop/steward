@@ -41,6 +41,15 @@ struct RootTabView: View {
         .overlay(alignment: .top) {
             BootstrapBanner(phase: bootstrap.phase)
         }
+        .onReceive(NotificationCenter.default.publisher(
+            for: .stewardNotificationTapped
+        )) { _ in
+            // Notification tap always lands the user in Chat. ChatView
+            // (or its onAppear, for cold-launch) reads the buffered
+            // TapEvent from NotificationActionRouter.shared and injects
+            // the suggested prompt as a coordinator-initiated turn.
+            selectedTab = .chat
+        }
     }
 }
 

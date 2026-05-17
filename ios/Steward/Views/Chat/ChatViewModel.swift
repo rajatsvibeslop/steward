@@ -124,6 +124,38 @@ final class ChatViewModel: ObservableObject {
     /// string but DO NOT auto-send (§1.7).
     func walkMeThroughItText() -> String { "walk me through it" }
 
+    // MARK: - Notification tap routing
+
+    /// Consume a tap event delivered by `NotificationActionRouter`. We
+    /// inject a coordinator-initiated bubble carrying the suggested
+    /// prompt — the user can reply in the input bar to act on it, or
+    /// ignore it. Malformed taps surface as a systemNote so the user
+    /// knows the notification context was lost rather than silently
+    /// being dropped into the chat root (hard-reject "no silent
+    /// fallback that opens to chat root without ANY indication").
+    func acceptNotificationTap(_ event: NotificationActionRouter.TapEvent) {
+        switch event {
+        case .routed(let context):
+            let prompt = context.suggestedPrompt ?? "Want to log something here?"
+            appendMessage(ChatMessage(
+                id: UUID().uuidString,
+                timestamp: clock(),
+                body: .coordinator(text: prompt, isStub: false)
+            ))
+            // Once we've injected a coordinator-initiated bubble there
+            // is conversation content; hide the greeting on next render.
+            hasAnyHistory = true
+        case .malformed(let reason):
+            appendMessage(ChatMessage(
+                id: UUID().uuidString,
+                timestamp: clock(),
+                body: .systemNote(text:
+                    "Steward couldn't read that notification cleanly (\(reason))."
+                )
+            ))
+        }
+    }
+
     // MARK: - Mutators
 
     private func appendUserBubble(text: String) {

@@ -45,12 +45,15 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await viewModel.loadInitialState()
-                voiceAvailability = await VoiceCaptureRegistry.current.availability
-                // If the user toggled voice off in Settings, reflect that here.
-                if let settings = try? await SettingsStore.shared.load(),
-                   !settings.voiceCaptureEnabled {
-                    voiceAvailability = .disabledInSettings
-                }
+                await refreshVoiceAvailability()
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: .voiceCaptureReadinessChanged
+            )) { _ in
+                // Track F bootstrap posts this once WhisperKit eager init
+                // completes (success or fail). Re-read availability so the
+                // mic flips from disabled-with-tooltip to active when ready.
+                Task { await refreshVoiceAvailability() }
             }
         }
     }
@@ -111,6 +114,19 @@ struct ChatView: View {
     }
 
     // MARK: - Actions
+
+    /// Read availability from the registry, then apply the Settings override
+    /// (`voice_capture_enabled = false` forces `.disabledInSettings`
+    /// regardless of WhisperKit readiness, so the tooltip explains the user
+    /// can re-enable it).
+    private func refreshVoiceAvailability() async {
+        var availability = await VoiceCaptureRegistry.current.availability
+        if let settings = try? await SettingsStore.shared.load(),
+           !settings.voiceCaptureEnabled {
+            availability = .disabledInSettings
+        }
+        voiceAvailability = availability
+    }
 
     private func sendDraft() {
         let payload = draft

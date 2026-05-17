@@ -112,6 +112,84 @@ final class VoiceCaptureServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - Adapter readiness mapping
+
+    func test_adapterMapping_readyMapsToReady() {
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .ready),
+            .ready
+        )
+    }
+
+    func test_adapterMapping_initializingStatesMapToNotLoaded() {
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .notInitialized),
+            .notLoaded
+        )
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .initializing),
+            .notLoaded
+        )
+    }
+
+    func test_adapterMapping_settingsUnavailableMapsToDisabledInSettings() {
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .unavailable(reason: .settings)),
+            .disabledInSettings
+        )
+    }
+
+    func test_adapterMapping_permissionUnavailableMapsToPermissionDenied() {
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .unavailable(reason: .permission)),
+            .permissionDenied
+        )
+    }
+
+    func test_adapterMapping_loadFailuresCollapseToNotLoaded() {
+        // Per design/ui-specs.md §1.6 the tooltip for framework-missing,
+        // model-missing, and init-failed is the same "Voice isn't ready
+        // right now" copy, so all three collapse to .notLoaded at the UI
+        // boundary while the service preserves the detail for diagnostics.
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(for: .unavailable(reason: .frameworkMissing)),
+            .notLoaded
+        )
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(
+                for: .unavailable(reason: .modelMissing(expectedPath: "/tmp/x"))
+            ),
+            .notLoaded
+        )
+        XCTAssertEqual(
+            VoiceCaptureAdapter.availability(
+                for: .unavailable(reason: .initFailed(message: "boom"))
+            ),
+            .notLoaded
+        )
+    }
+
+    // MARK: - Cancel
+
+    func test_cancelRecording_noopsWhenNotRecording() async {
+        // Cancel must be safe to call without an active recording — the
+        // gesture-cancel path in ChatInputBar can fire even if begin
+        // failed. We just want a non-crashing no-op.
+        let dbURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("voice-tests-\(UUID().uuidString).sqlite")
+        let provider = DatabaseProvider(location: .file(dbURL))
+        _ = try? await provider.database()
+        let settings = SettingsStore(provider: provider)
+        let (bundle, _) = try! makeFakeBundle()
+        let locator = WhisperKitModelLocator(modelName: "stub-tiny", bundle: bundle)
+        let service = VoiceCaptureService(settings: settings, locator: locator)
+        await service.cancelRecording()
+        // No assertion beyond "didn't crash" — the readiness should be
+        // unchanged (still .notInitialized since we never inited).
+        let readiness = await service.readiness
+        XCTAssertEqual(readiness, .notInitialized)
+    }
+
     func test_serviceInitialization_respectsSettingsDisable() async throws {
         let dbURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("voice-tests-\(UUID().uuidString).sqlite")

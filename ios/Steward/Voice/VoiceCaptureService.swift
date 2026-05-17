@@ -297,6 +297,18 @@ actor VoiceCaptureService {
         #endif
     }
 
+    /// Drop the in-progress recording without transcribing. Called when the
+    /// user drags off the mic button (gesture cancel). Idempotent — safe to
+    /// call when not recording.
+    func cancelRecording() async {
+        guard isRecording else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        isRecording = false
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        samples.removeAll(keepingCapacity: true)
+    }
+
     /// Mock-input seam — tests feed raw float samples instead of opening a
     /// mic. After feeding, call `stopAndTranscribe(usingFedSamples:)`.
     #if DEBUG

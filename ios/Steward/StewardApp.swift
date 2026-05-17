@@ -127,9 +127,20 @@ enum TrackFBootstrap {
 
         // 4. Voice eager init. Detached so the model load (potentially
         //    multi-hundred MB) doesn't slow first paint. The service no-ops
-        //    if voice is disabled in settings.
+        //    if voice is disabled in settings. Once init returns (success or
+        //    fail), install the adapter into the registry so ChatView's
+        //    mic button reflects the real service state, and post the
+        //    readiness-changed notification so any already-mounted ChatView
+        //    re-reads `availability`.
         Task.detached(priority: .utility) {
             await VoiceCaptureService.shared.initializeIfNeeded()
+            await MainActor.run {
+                VoiceCaptureRegistry.current = VoiceCaptureAdapter()
+                NotificationCenter.default.post(
+                    name: .voiceCaptureReadinessChanged,
+                    object: nil
+                )
+            }
         }
     }
 

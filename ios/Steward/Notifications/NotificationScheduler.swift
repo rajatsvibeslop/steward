@@ -21,17 +21,17 @@ import UserNotifications
 
 // MARK: - Public types
 
-public struct ScheduledNotification: Sendable, Equatable {
-    public let notificationID: NotificationID
-    public let request: NotificationRequest
-    public let firesAt: Date
-    public let unRequestIdentifier: String
-    public let mode: NotificationMode
+struct ScheduledNotification: Sendable, Equatable {
+    let notificationID: NotificationID
+    let request: NotificationRequest
+    let firesAt: Date
+    let unRequestIdentifier: String
+    let mode: NotificationMode
     /// Set when this occurrence came from a recurring rule. topUpHorizon
     /// uses it to dedup re-expansions; cancel-by-id leaves the rule active.
-    public let ruleID: String?
+    let ruleID: String?
 
-    public init(
+    init(
         notificationID: NotificationID,
         request: NotificationRequest,
         firesAt: Date,
@@ -48,7 +48,7 @@ public struct ScheduledNotification: Sendable, Equatable {
     }
 }
 
-public enum ScheduleOutcome: Sendable, Equatable {
+enum ScheduleOutcome: Sendable, Equatable {
     case scheduled(notificationID: String, firesAt: Date)
     case capExceeded(reason: CapReason, nextAvailableSlot: Date?)
     case suppressedByQuietHours(rescheduledTo: Date?)
@@ -59,7 +59,7 @@ public enum ScheduleOutcome: Sendable, Equatable {
     case systemError(reason: String)
 }
 
-public enum CapReason: Sendable, Equatable {
+enum CapReason: Sendable, Equatable {
     case dailyMax(currentCount: Int, max: Int)
     case minGap(lastFiredAt: Date, requiredGapMinutes: Int)
     case mercyModeCap
@@ -67,7 +67,7 @@ public enum CapReason: Sendable, Equatable {
 
 /// Scope tag — used so morning-brief / coordinator-priority requests can opt
 /// past mercy-mode caps the way addendum §1.3 + spec §15 describe.
-public enum AgentScope: Sendable, Equatable {
+enum AgentScope: Sendable, Equatable {
     case coordinator
     case domain(String)
 }
@@ -76,7 +76,7 @@ public enum AgentScope: Sendable, Equatable {
 
 /// Minimal slice of UNUserNotificationCenter the scheduler depends on. Lets
 /// tests inject a fake without standing up a real notification center.
-public protocol UserNotificationCenterProtocol: AnyObject, Sendable {
+protocol UserNotificationCenterProtocol: AnyObject, Sendable {
     func add(_ request: UNNotificationRequest) async throws
     func removePendingNotificationRequests(withIdentifiers identifiers: [String])
     func pendingNotificationRequests() async -> [UNNotificationRequest]
@@ -91,8 +91,8 @@ extension UNUserNotificationCenter: UserNotificationCenterProtocol {
 
 // MARK: - The actor
 
-public actor NotificationScheduler {
-    public static let shared = NotificationScheduler()
+actor NotificationScheduler {
+    static let shared = NotificationScheduler()
 
     private let center: any UserNotificationCenterProtocol
     private let settings: SettingsProviding
@@ -105,7 +105,7 @@ public actor NotificationScheduler {
     /// reads pending notifications so a fresh launch reconstructs state.
     private var scheduled: [ScheduledNotification] = []
 
-    public init(
+    init(
         center: any UserNotificationCenterProtocol = UNUserNotificationCenter.current(),
         settings: SettingsProviding = LiveSettingsProvider(),
         clock: ClockProviding = SystemClock(),
@@ -121,7 +121,7 @@ public actor NotificationScheduler {
 
     // MARK: - Public API
 
-    public func schedule(_ req: NotificationRequest, scope: AgentScope) async -> ScheduleOutcome {
+    func schedule(_ req: NotificationRequest, scope: AgentScope) async -> ScheduleOutcome {
         await scheduleInternal(req, scope: scope, ruleID: nil)
     }
 
@@ -243,7 +243,7 @@ public actor NotificationScheduler {
         return .scheduled(notificationID: unRequestID, firesAt: req.fireAt)
     }
 
-    public func scheduleRecurring(
+    func scheduleRecurring(
         _ rule: RRuleSubset,
         request: NotificationRequest,
         scope: AgentScope,
@@ -320,7 +320,7 @@ public actor NotificationScheduler {
 
     /// Cancel a single scheduled occurrence by NotificationID (the typed wrapper
     /// from §1.3, not a bare String — deslop FIX #1).
-    public func cancel(id: NotificationID) async {
+    func cancel(id: NotificationID) async {
         let raw = id.rawValue
         center.removePendingNotificationRequests(withIdentifiers: [raw])
         scheduled.removeAll { $0.unRequestIdentifier == raw }
@@ -328,7 +328,7 @@ public actor NotificationScheduler {
 
     /// Cancel every active recurring rule of a given kind AND its pending
     /// scheduled occurrences. Used by `notification.cancel(kind)`.
-    public func cancelKind(_ kind: NotificationKind) async {
+    func cancelKind(_ kind: NotificationKind) async {
         let toCancel = scheduled.filter { $0.request.kind == kind }
         let ids = toCancel.map(\.unRequestIdentifier)
         if !ids.isEmpty {
@@ -340,7 +340,7 @@ public actor NotificationScheduler {
         }
     }
 
-    public func upcoming(domain: String?) async -> [ScheduledNotification] {
+    func upcoming(domain: String?) async -> [ScheduledNotification] {
         guard let domain else { return scheduled }
         return scheduled.filter { $0.request.domain == domain }
     }
@@ -359,7 +359,7 @@ public actor NotificationScheduler {
     ///    schedule any whose fireAt isn't already pending. Cap math runs
     ///    per occurrence; rule remains active even if an individual
     ///    occurrence is cap-blocked.
-    public func topUpHorizon(daysAhead: Int = 7) async {
+    func topUpHorizon(daysAhead: Int = 7) async {
         // 1. UN reconciliation
         let pending = await center.pendingNotificationRequests()
         let pendingIDs = Set(pending.map(\.identifier))
@@ -371,9 +371,11 @@ public actor NotificationScheduler {
         do {
             rules = try await store.loadActive()
         } catch {
-            #if DEBUG
-            print("topUpHorizon: rule load failed:", error)
-            #endif
+            // Rule store outage isn't fatal — caller still sees a healthy
+            // foreground tick; next tick will retry. Silent return matches
+            // the "degrade visibly when user-facing, silent when internal"
+            // principle: the user-visible morning brief still fires from
+            // notifications already in UN's pending queue.
             return
         }
         if rules.isEmpty { return }
@@ -450,7 +452,7 @@ public actor NotificationScheduler {
 
     #if DEBUG
     /// Reset scheduler state for tests. Production builds don't see this.
-    public func _resetForTesting() {
+    func _resetForTesting() {
         scheduled.removeAll()
     }
     #endif
@@ -506,24 +508,24 @@ public actor NotificationScheduler {
 
 // MARK: - Supporting providers (kept generic so tests can inject)
 
-public protocol SettingsProviding: Sendable {
+protocol SettingsProviding: Sendable {
     func load() async throws -> Settings
 }
 
-public struct LiveSettingsProvider: SettingsProviding {
-    public init() {}
-    public func load() async throws -> Settings {
+struct LiveSettingsProvider: SettingsProviding {
+    init() {}
+    func load() async throws -> Settings {
         try await SettingsStore.shared.load()
     }
 }
 
-public protocol ClockProviding: Sendable {
+protocol ClockProviding: Sendable {
     func now() -> Date
 }
 
-public struct SystemClock: ClockProviding {
-    public init() {}
-    public func now() -> Date { Date() }
+struct SystemClock: ClockProviding {
+    init() {}
+    func now() -> Date { Date() }
 }
 
 // MARK: - QuietHoursWindow

@@ -15,20 +15,20 @@
 import Foundation
 import GRDB
 
-public struct RecurringRuleRecord: Sendable, Codable, Equatable {
-    public var ruleID: String
-    public var rrule: String
-    public var kind: NotificationKind
-    public var domain: String?
-    public var instrumentID: String?
-    public var templateContextJSON: String
-    public var actionContextJSON: String?
-    public var priority: Int
-    public var scopeActor: String       // "coordinator" or "agent:<domain>"
-    public var createdAt: Date
-    public var cancelledAt: Date?
+struct RecurringRuleRecord: Sendable, Codable, Equatable {
+    var ruleID: String
+    var rrule: String
+    var kind: NotificationKind
+    var domain: String?
+    var instrumentID: String?
+    var templateContextJSON: String
+    var actionContextJSON: String?
+    var priority: Int
+    var scopeActor: String       // "coordinator" or "agent:<domain>"
+    var createdAt: Date
+    var cancelledAt: Date?
 
-    public init(
+    init(
         ruleID: String = UUID().uuidString,
         rrule: String,
         kind: NotificationKind,
@@ -55,18 +55,18 @@ public struct RecurringRuleRecord: Sendable, Codable, Equatable {
     }
 }
 
-public actor RecurringRuleStore {
-    public static let shared = RecurringRuleStore()
+actor RecurringRuleStore {
+    static let shared = RecurringRuleStore()
 
     private let provider: DatabaseProvider
 
-    public init(provider: DatabaseProvider = .shared) {
+    init(provider: DatabaseProvider = .shared) {
         self.provider = provider
     }
 
     /// Insert a new active rule. Returns the persisted record.
     @discardableResult
-    public func insert(_ record: RecurringRuleRecord) async throws -> RecurringRuleRecord {
+    func insert(_ record: RecurringRuleRecord) async throws -> RecurringRuleRecord {
         let queue = try await provider.database()
         try await queue.write { db in
             try db.execute(
@@ -95,7 +95,7 @@ public actor RecurringRuleStore {
         return record
     }
 
-    public func loadActive() async throws -> [RecurringRuleRecord] {
+    func loadActive() async throws -> [RecurringRuleRecord] {
         let queue = try await provider.database()
         return try await queue.read { db in
             let rows = try Row.fetchAll(
@@ -113,7 +113,7 @@ public actor RecurringRuleStore {
         }
     }
 
-    public func cancel(ruleID: String, at: Date = Date()) async throws {
+    func cancel(ruleID: String, at: Date = Date()) async throws {
         let queue = try await provider.database()
         try await queue.write { db in
             try db.execute(
@@ -125,7 +125,7 @@ public actor RecurringRuleStore {
 
     /// Cancel every active rule of a given kind. Used when the agent cancels
     /// "all morningBrief notifications" via `notification.cancel(kind)`.
-    public func cancelAll(kind: NotificationKind, at: Date = Date()) async throws -> Int {
+    func cancelAll(kind: NotificationKind, at: Date = Date()) async throws -> Int {
         let queue = try await provider.database()
         return try await queue.write { db in
             try db.execute(

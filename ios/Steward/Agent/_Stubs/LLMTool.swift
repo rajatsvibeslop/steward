@@ -22,7 +22,7 @@ import Foundation
 /// Implementations are pure Swift actors / structs — they never see a
 /// `LanguageModelSession`, never see permission UI state, and never compose
 /// notification bodies. The session's tool dispatcher handles serialization.
-public protocol LLMTool: Sendable {
+protocol LLMTool: Sendable {
     var id: String { get }
     var description: String { get }
     var jsonSchemaForArgs: String { get }
@@ -32,8 +32,8 @@ public protocol LLMTool: Sendable {
 /// Structured tool error surface. Foundation Models receives errors as part of
 /// the tool result vocabulary — never as Swift `throw`s that bubble out of
 /// `respond(to:)` (which would terminate the agent loop entirely).
-public struct ToolError: Error, Codable, Sendable {
-    public enum Kind: String, Codable, Sendable {
+struct ToolError: Error, Codable, Sendable {
+    enum Kind: String, Codable, Sendable {
         case argumentsInvalid
         case permissionDenied
         case capExceeded
@@ -41,11 +41,11 @@ public struct ToolError: Error, Codable, Sendable {
         case backendUnavailable
         case internalFailure
     }
-    public let kind: Kind
-    public let message: String
-    public let hint: String?
+    let kind: Kind
+    let message: String
+    let hint: String?
 
-    public init(kind: Kind, message: String, hint: String? = nil) {
+    init(kind: Kind, message: String, hint: String? = nil) {
         self.kind = kind
         self.message = message
         self.hint = hint

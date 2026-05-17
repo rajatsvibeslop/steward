@@ -17,20 +17,20 @@ import Foundation
 
 // MARK: - notification.schedule
 
-public struct NotificationScheduleArgs: Codable, Sendable {
-    public var kind: NotificationKind
-    public var fireAt: Date
-    public var domain: String?
-    public var instrumentID: String?
-    public var commitmentTitle: String?
-    public var instrumentName: String?
-    public var domainDisplayName: String?
-    public var briefTimeDisplay: String?
-    public var actionContextJSON: String?
+struct NotificationScheduleArgs: Codable, Sendable {
+    var kind: NotificationKind
+    var fireAt: Date
+    var domain: String?
+    var instrumentID: String?
+    var commitmentTitle: String?
+    var instrumentName: String?
+    var domainDisplayName: String?
+    var briefTimeDisplay: String?
+    var actionContextJSON: String?
     /// Agent's stated reason — required when called by an agent / coordinator.
-    public var reasoning: String
+    var reasoning: String
 
-    public init(
+    init(
         kind: NotificationKind,
         fireAt: Date,
         domain: String? = nil,
@@ -55,22 +55,22 @@ public struct NotificationScheduleArgs: Codable, Sendable {
     }
 }
 
-public struct NotificationScheduleResult: Codable, Sendable {
-    public let outcome: ScheduleOutcomeWire
-    public let notificationID: String?
-    public let firesAt: Date?
+struct NotificationScheduleResult: Codable, Sendable {
+    let outcome: ScheduleOutcomeWire
+    let notificationID: String?
+    let firesAt: Date?
 }
 
 /// Wire representation of `ScheduleOutcome` that's friendly to JSON
 /// (associated values don't survive the default Codable shape for enums on
 /// older Swift versions; the wire form keeps the LLM contract stable).
-public struct ScheduleOutcomeWire: Codable, Sendable, Equatable {
-    public let status: String
-    public let reason: String?
-    public let nextAvailableSlot: Date?
-    public let rescheduledTo: Date?
+struct ScheduleOutcomeWire: Codable, Sendable, Equatable {
+    let status: String
+    let reason: String?
+    let nextAvailableSlot: Date?
+    let rescheduledTo: Date?
 
-    public static func from(_ outcome: ScheduleOutcome) -> ScheduleOutcomeWire {
+    static func from(_ outcome: ScheduleOutcome) -> ScheduleOutcomeWire {
         switch outcome {
         case .scheduled:
             return .init(status: "scheduled", reason: nil, nextAvailableSlot: nil, rescheduledTo: nil)
@@ -93,16 +93,16 @@ public struct ScheduleOutcomeWire: Codable, Sendable, Equatable {
     }
 }
 
-public actor NotificationScheduleTool: LLMTool {
-    public let id = ToolID.notificationSchedule.rawValue
-    public let description = "Schedule a local notification at fireAt with a templated body."
-    public let jsonSchemaForArgs: String
+actor NotificationScheduleTool: LLMTool {
+    let id = ToolID.notificationSchedule.rawValue
+    let description = "Schedule a local notification at fireAt with a templated body."
+    let jsonSchemaForArgs: String
 
     private let scheduler: NotificationScheduler
     private let auditLog: AuditLog
     private let turnIDProvider: @Sendable () -> TurnID
 
-    public init(
+    init(
         scheduler: NotificationScheduler = .shared,
         auditLog: AuditLog = .shared,
         turnIDProvider: @escaping @Sendable () -> TurnID = { TurnID.generate() },
@@ -114,7 +114,7 @@ public actor NotificationScheduleTool: LLMTool {
         self.jsonSchemaForArgs = jsonSchemaForArgs
     }
 
-    public static let defaultSchema: String = """
+    static let defaultSchema: String = """
     {
       "type": "object",
       "properties": {
@@ -127,7 +127,7 @@ public actor NotificationScheduleTool: LLMTool {
     }
     """
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args = try Self.decode(argsJSON)
         let outcome = await schedule(args: args, actor: .coordinator)
         let result = NotificationScheduleResult(
@@ -144,7 +144,7 @@ public actor NotificationScheduleTool: LLMTool {
 
     /// Direct entry point for callers who already have a parsed args struct
     /// (UI inline grant flow, BG handler, tests).
-    public func schedule(args: NotificationScheduleArgs, actor: ActorRef) async -> ScheduleOutcome {
+    func schedule(args: NotificationScheduleArgs, actor: ActorRef) async -> ScheduleOutcome {
         let request = NotificationRequest(
             kind: args.kind,
             domain: args.domain,
@@ -181,9 +181,6 @@ public actor NotificationScheduleTool: LLMTool {
                     source: "tool:\(ToolID.notificationSchedule.rawValue)"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for notification.schedule:", error)
-                #endif
             }
         }
         return outcome
@@ -213,23 +210,23 @@ public actor NotificationScheduleTool: LLMTool {
 
 // MARK: - notification.schedule_recurring
 
-public struct NotificationScheduleRecurringArgs: Codable, Sendable {
-    public var kind: NotificationKind
-    public var recurrenceRule: String
-    public var domain: String?
-    public var instrumentID: String?
-    public var commitmentTitle: String?
-    public var instrumentName: String?
-    public var domainDisplayName: String?
-    public var briefTimeDisplay: String?
-    public var actionContextJSON: String?
-    public var reasoning: String
+struct NotificationScheduleRecurringArgs: Codable, Sendable {
+    var kind: NotificationKind
+    var recurrenceRule: String
+    var domain: String?
+    var instrumentID: String?
+    var commitmentTitle: String?
+    var instrumentName: String?
+    var domainDisplayName: String?
+    var briefTimeDisplay: String?
+    var actionContextJSON: String?
+    var reasoning: String
 }
 
-public actor NotificationScheduleRecurringTool: LLMTool {
-    public let id = ToolID.notificationScheduleRecurring.rawValue
-    public let description = "Schedule a recurring local notification from an RFC 5545 RRULE subset."
-    public let jsonSchemaForArgs = """
+actor NotificationScheduleRecurringTool: LLMTool {
+    let id = ToolID.notificationScheduleRecurring.rawValue
+    let description = "Schedule a recurring local notification from an RFC 5545 RRULE subset."
+    let jsonSchemaForArgs = """
     {
       "type": "object",
       "properties": {
@@ -246,7 +243,7 @@ public actor NotificationScheduleRecurringTool: LLMTool {
     private let auditLog: AuditLog
     private let turnIDProvider: @Sendable () -> TurnID
 
-    public init(
+    init(
         scheduler: NotificationScheduler = .shared,
         auditLog: AuditLog = .shared,
         turnIDProvider: @escaping @Sendable () -> TurnID = { TurnID.generate() }
@@ -256,7 +253,7 @@ public actor NotificationScheduleRecurringTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         guard let data = argsJSON.data(using: .utf8) else {
             throw ToolError(kind: .argumentsInvalid, message: "argsJSON not UTF-8")
         }
@@ -311,9 +308,6 @@ public actor NotificationScheduleRecurringTool: LLMTool {
                     source: "tool:\(ToolID.notificationScheduleRecurring.rawValue)"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for notification.schedule_recurring:", error)
-                #endif
             }
         }
 
@@ -328,16 +322,16 @@ public actor NotificationScheduleRecurringTool: LLMTool {
 
 // MARK: - notification.cancel
 
-public struct NotificationCancelArgs: Codable, Sendable {
+struct NotificationCancelArgs: Codable, Sendable {
     /// Either a UN request identifier OR a NotificationKind raw value.
-    public var notificationIDOrKind: String
-    public var reasoning: String
+    var notificationIDOrKind: String
+    var reasoning: String
 }
 
-public actor NotificationCancelTool: LLMTool {
-    public let id = ToolID.notificationCancel.rawValue
-    public let description = "Cancel a scheduled notification by ID or kind."
-    public let jsonSchemaForArgs = """
+actor NotificationCancelTool: LLMTool {
+    let id = ToolID.notificationCancel.rawValue
+    let description = "Cancel a scheduled notification by ID or kind."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"notificationIDOrKind":{"type":"string"},"reasoning":{"type":"string"}},"required":["notificationIDOrKind","reasoning"]}
     """
 
@@ -345,7 +339,7 @@ public actor NotificationCancelTool: LLMTool {
     private let auditLog: AuditLog
     private let turnIDProvider: @Sendable () -> TurnID
 
-    public init(
+    init(
         scheduler: NotificationScheduler = .shared,
         auditLog: AuditLog = .shared,
         turnIDProvider: @escaping @Sendable () -> TurnID = { TurnID.generate() }
@@ -355,7 +349,7 @@ public actor NotificationCancelTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         guard let data = argsJSON.data(using: .utf8),
               let args = try? JSONDecoder().decode(NotificationCancelArgs.self, from: data)
         else {
@@ -403,9 +397,6 @@ public actor NotificationCancelTool: LLMTool {
                     source: "tool:\(ToolID.notificationCancel.rawValue)"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for notification.cancel:", error)
-                #endif
             }
         }
 
@@ -419,22 +410,22 @@ public actor NotificationCancelTool: LLMTool {
 
 // MARK: - notification.list_upcoming
 
-public struct NotificationListUpcomingArgs: Codable, Sendable {
-    public var domain: String?
-    public var limit: Int?
+struct NotificationListUpcomingArgs: Codable, Sendable {
+    var domain: String?
+    var limit: Int?
 }
 
-public actor NotificationListUpcomingTool: LLMTool {
-    public let id = ToolID.notificationListUpcoming.rawValue
-    public let description = "List scheduled notifications, newest first."
-    public let jsonSchemaForArgs = """
+actor NotificationListUpcomingTool: LLMTool {
+    let id = ToolID.notificationListUpcoming.rawValue
+    let description = "List scheduled notifications, newest first."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"domain":{"type":"string"},"limit":{"type":"integer"}}}
     """
 
     private let scheduler: NotificationScheduler
-    public init(scheduler: NotificationScheduler = .shared) { self.scheduler = scheduler }
+    init(scheduler: NotificationScheduler = .shared) { self.scheduler = scheduler }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: NotificationListUpcomingArgs
         if let data = argsJSON.data(using: .utf8),
            let parsed = try? JSONDecoder().decode(NotificationListUpcomingArgs.self, from: data) {

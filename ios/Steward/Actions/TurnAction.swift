@@ -22,39 +22,39 @@ import Foundation
 /// time-sort like a real ULID, but the events table indexes on created_at
 /// anyway. Pod B can swap in a real ULID generator later without touching
 /// callers.
-public struct ActionID: Hashable, Codable, Sendable, RawRepresentable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-    public static func generate() -> ActionID {
+struct ActionID: Hashable, Codable, Sendable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static func generate() -> ActionID {
         ActionID(rawValue: UUID().uuidString)
     }
 }
 
-public struct TurnID: Hashable, Codable, Sendable, RawRepresentable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-    public static func generate() -> TurnID {
+struct TurnID: Hashable, Codable, Sendable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static func generate() -> TurnID {
         TurnID(rawValue: UUID().uuidString)
     }
 }
 
-public struct EventID: Hashable, Codable, Sendable, RawRepresentable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-    public static func generate() -> EventID {
+struct EventID: Hashable, Codable, Sendable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static func generate() -> EventID {
         EventID(rawValue: UUID().uuidString)
     }
 }
 
-public struct MemoryID: Hashable, Codable, Sendable, RawRepresentable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
+struct MemoryID: Hashable, Codable, Sendable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
 }
 
-public struct NotificationID: Hashable, Codable, Sendable, RawRepresentable {
-    public let rawValue: String
-    public init(rawValue: String) { self.rawValue = rawValue }
-    public static func generate() -> NotificationID {
+struct NotificationID: Hashable, Codable, Sendable, RawRepresentable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static func generate() -> NotificationID {
         NotificationID(rawValue: UUID().uuidString)
     }
 }
@@ -64,13 +64,13 @@ public struct NotificationID: Hashable, Codable, Sendable, RawRepresentable {
 /// Who performed the action. The events table CHECK constraint requires
 /// `reasoning` to be set whenever `actor LIKE 'agent:%' OR actor='coordinator'`
 /// (hard reject #11). `ActorRef.dbValue` matches that string vocabulary.
-public enum ActorRef: Codable, Sendable, Equatable, Hashable {
+enum ActorRef: Codable, Sendable, Equatable, Hashable {
     case user
     case system
     case coordinator
     case agent(domain: String)
 
-    public var dbValue: String {
+    var dbValue: String {
         switch self {
         case .user:        return "user"
         case .system:      return "system"
@@ -82,7 +82,7 @@ public enum ActorRef: Codable, Sendable, Equatable, Hashable {
     /// Inverse of `dbValue`. Returns nil if the column is malformed (e.g. an
     /// old "agent:" with no domain) — callers handle that as a soft error so
     /// the audit log never gates the app on bad legacy data.
-    public static func parse(_ raw: String) -> ActorRef? {
+    static func parse(_ raw: String) -> ActorRef? {
         switch raw {
         case "user": return .user
         case "system": return .system
@@ -96,7 +96,7 @@ public enum ActorRef: Codable, Sendable, Equatable, Hashable {
 
     /// `true` when the events CHECK constraint requires `reasoning`. Used by
     /// AuditLog to fail fast in DEBUG if reasoning is empty.
-    public var requiresReasoning: Bool {
+    var requiresReasoning: Bool {
         switch self {
         case .user, .system: return false
         case .coordinator, .agent: return true
@@ -107,20 +107,20 @@ public enum ActorRef: Codable, Sendable, Equatable, Hashable {
 // MARK: - Calendar / Reminder payloads (used by InverseAction)
 
 /// Snapshot of an EKEvent at write time, big enough to recreate it on undo.
-public struct CalendarEventPayload: Codable, Sendable, Equatable {
-    public var title: String
-    public var startDate: Date
-    public var endDate: Date
-    public var notes: String?
-    public var calendarIdentifier: String?    // EKCalendar.calendarIdentifier
-    public var calendarName: String?          // last-known display name for UI
-    public var isAllDay: Bool
-    public var location: String?
+struct CalendarEventPayload: Codable, Sendable, Equatable {
+    var title: String
+    var startDate: Date
+    var endDate: Date
+    var notes: String?
+    var calendarIdentifier: String?    // EKCalendar.calendarIdentifier
+    var calendarName: String?          // last-known display name for UI
+    var isAllDay: Bool
+    var location: String?
     /// Stable EventKit identifier captured at write time. Used so that undo of
     /// a `modify` knows which EKEvent to re-write.
-    public var ekEventID: String?
+    var ekEventID: String?
 
-    public init(
+    init(
         title: String,
         startDate: Date,
         endDate: Date,
@@ -143,15 +143,15 @@ public struct CalendarEventPayload: Codable, Sendable, Equatable {
     }
 }
 
-public struct ReminderPayload: Codable, Sendable, Equatable {
-    public var title: String
-    public var dueDate: Date?
-    public var notes: String?
-    public var listIdentifier: String?
-    public var listName: String?
-    public var ekReminderID: String?
+struct ReminderPayload: Codable, Sendable, Equatable {
+    var title: String
+    var dueDate: Date?
+    var notes: String?
+    var listIdentifier: String?
+    var listName: String?
+    var ekReminderID: String?
 
-    public init(
+    init(
         title: String,
         dueDate: Date? = nil,
         notes: String? = nil,
@@ -170,21 +170,21 @@ public struct ReminderPayload: Codable, Sendable, Equatable {
 
 // MARK: - Notification request (used by InverseAction and NotificationScheduler)
 
-public struct NotificationRequest: Codable, Sendable, Equatable {
-    public var kind: NotificationKind
-    public var domain: String?
-    public var instrumentID: String?
-    public var fireAt: Date
-    public var templateContext: TemplateContext
+struct NotificationRequest: Codable, Sendable, Equatable {
+    var kind: NotificationKind
+    var domain: String?
+    var instrumentID: String?
+    var fireAt: Date
+    var templateContext: TemplateContext
     /// Opaque JSON the tap handler reads to drive a one-turn coordinator
     /// response. Templates cannot read it — bodies stay deterministic.
-    public var actionContextJSON: String?
+    var actionContextJSON: String?
     /// Tie-breaker for cap math when several requests are valid at once.
     /// Coordinator-emitted requests outrank domain-agent ones; morning brief
     /// always wins. Higher = more important.
-    public var priority: Int
+    var priority: Int
 
-    public init(
+    init(
         kind: NotificationKind,
         domain: String? = nil,
         instrumentID: String? = nil,
@@ -211,7 +211,7 @@ public struct NotificationRequest: Codable, Sendable, Equatable {
 /// HARD REJECT #4 enforcement: `UndoExecutor.execute(_:)` switches on this
 /// without a `default:` arm. Adding a new case forces the compiler to flag
 /// the executor.
-public enum InverseAction: Codable, Sendable, Equatable {
+enum InverseAction: Codable, Sendable, Equatable {
     /// Undo a `calendar.delete` — restore the event from its captured payload.
     case restoreCalendarEvent(payload: CalendarEventPayload)
 
@@ -258,21 +258,21 @@ public enum InverseAction: Codable, Sendable, Equatable {
 /// One agent-emitted external mutation, paired with its inverse and a
 /// reasoning string. Persisted into `events.payload_json` under key
 /// `turn_action`; UndoExecutor reads by event_id.
-public struct TurnAction: Codable, Sendable {
-    public let id: ActionID
-    public let turnID: TurnID
-    public let toolID: ToolID
-    public let actor: ActorRef
-    public let executedAt: Date
+struct TurnAction: Codable, Sendable {
+    let id: ActionID
+    let turnID: TurnID
+    let toolID: ToolID
+    let actor: ActorRef
+    let executedAt: Date
     /// Agent's stated reason — REQUIRED per hard reject #11. AuditLog asserts
     /// non-empty for `coordinator` / `agent:*` actors.
-    public let reasoning: String
-    public let inverse: InverseAction
+    let reasoning: String
+    let inverse: InverseAction
     /// IDs of dependent actions that must be reversed before this one can be
     /// undone (v1.1 fills this; v1 leaves it empty).
-    public let cascades: [ActionID]
+    let cascades: [ActionID]
 
-    public init(
+    init(
         id: ActionID = .generate(),
         turnID: TurnID,
         toolID: ToolID,
@@ -295,7 +295,7 @@ public struct TurnAction: Codable, Sendable {
 
 // MARK: - Undo outcomes
 
-public enum UndoOutcome: Sendable, Equatable {
+enum UndoOutcome: Sendable, Equatable {
     case undone(originalEventID: EventID, undoEventID: EventID)
     case blockedByDependents([ActionID])
     case alreadyUndone(originalEventID: EventID)
@@ -307,7 +307,7 @@ public enum UndoOutcome: Sendable, Equatable {
 /// typed "Pod C hasn't wired this yet" error WITHOUT introducing a `default:`
 /// arm in the undo switch (hard reject #4). Adding an InverseAction case must
 /// also add a kind case here — the test in `UndoExecutorTests` asserts parity.
-public enum InverseActionKind: String, Codable, Sendable, CaseIterable {
+enum InverseActionKind: String, Codable, Sendable, CaseIterable {
     case restoreCalendarEvent
     case deleteCalendarEvent
     case modifyCalendarEvent
@@ -322,7 +322,7 @@ public enum InverseActionKind: String, Codable, Sendable, CaseIterable {
     case unforgetMemory
 }
 
-public extension InverseAction {
+extension InverseAction {
     var kind: InverseActionKind {
         switch self {
         case .restoreCalendarEvent:    return .restoreCalendarEvent
@@ -341,7 +341,7 @@ public extension InverseAction {
     }
 }
 
-public enum UndoExecutorError: Error, CustomStringConvertible, Sendable {
+enum UndoExecutorError: Error, CustomStringConvertible, Sendable {
     case eventPayloadMissing(EventID)
     case eventPayloadInvalid(EventID, underlying: Error)
     case notYetImplemented(InverseActionKind)
@@ -349,7 +349,7 @@ public enum UndoExecutorError: Error, CustomStringConvertible, Sendable {
     case ekStoreUnavailable
     case backendFailure(String)
 
-    public var description: String {
+    var description: String {
         switch self {
         case .eventPayloadMissing(let id):
             return "events.payload_json for \(id.rawValue) has no `turn_action` entry."

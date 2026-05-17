@@ -17,17 +17,17 @@ import Foundation
 
 // MARK: - calendar.read
 
-public actor CalendarReadTool: LLMTool {
-    public let id = ToolID.calendarRead.rawValue
-    public let description = "Read calendar events between start and end."
-    public let jsonSchemaForArgs = """
+actor CalendarReadTool: LLMTool {
+    let id = ToolID.calendarRead.rawValue
+    let description = "Read calendar events between start and end."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"start":{"type":"string","format":"date-time"},"end":{"type":"string","format":"date-time"},"calendarName":{"type":"string"}},"required":["start","end"]}
     """
 
     private let gateway: EventKitGateway
-    public init(gateway: EventKitGateway = .shared) { self.gateway = gateway }
+    init(gateway: EventKitGateway = .shared) { self.gateway = gateway }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: CalendarReadArgs = try decode(argsJSON)
         let result = await gateway.executeCalendarRead(args)
         return try wireOrThrow(result)
@@ -36,10 +36,10 @@ public actor CalendarReadTool: LLMTool {
 
 // MARK: - calendar.write
 
-public actor CalendarWriteTool: LLMTool {
-    public let id = ToolID.calendarWrite.rawValue
-    public let description = "Create a calendar event."
-    public let jsonSchemaForArgs = """
+actor CalendarWriteTool: LLMTool {
+    let id = ToolID.calendarWrite.rawValue
+    let description = "Create a calendar event."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"title":{"type":"string"},"startDate":{"type":"string","format":"date-time"},"endDate":{"type":"string","format":"date-time"},"notes":{"type":"string"},"calendarName":{"type":"string"},"reasoning":{"type":"string"}},"required":["title","startDate","endDate","reasoning"]}
     """
 
@@ -48,7 +48,7 @@ public actor CalendarWriteTool: LLMTool {
     private let turnIDProvider: @Sendable () -> TurnID
     private let actorRef: ActorRef
 
-    public init(
+    init(
         gateway: EventKitGateway = .shared,
         auditLog: AuditLog = .shared,
         actor: ActorRef = .coordinator,
@@ -60,7 +60,7 @@ public actor CalendarWriteTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: CalendarWriteArgs = try decode(argsJSON)
         let (result, payload) = await gateway.executeCalendarWrite(args)
 
@@ -84,9 +84,6 @@ public actor CalendarWriteTool: LLMTool {
                     source: "tool:calendar.write"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for calendar.write:", error)
-                #endif
             }
         }
         return try wireOrThrow(result)
@@ -95,10 +92,10 @@ public actor CalendarWriteTool: LLMTool {
 
 // MARK: - calendar.modify
 
-public actor CalendarModifyTool: LLMTool {
-    public let id = ToolID.calendarModify.rawValue
-    public let description = "Modify an existing calendar event by EventKit identifier."
-    public let jsonSchemaForArgs = """
+actor CalendarModifyTool: LLMTool {
+    let id = ToolID.calendarModify.rawValue
+    let description = "Modify an existing calendar event by EventKit identifier."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"ekEventID":{"type":"string"},"patch":{"type":"object"},"reasoning":{"type":"string"}},"required":["ekEventID","patch","reasoning"]}
     """
 
@@ -107,7 +104,7 @@ public actor CalendarModifyTool: LLMTool {
     private let turnIDProvider: @Sendable () -> TurnID
     private let actorRef: ActorRef
 
-    public init(
+    init(
         gateway: EventKitGateway = .shared,
         auditLog: AuditLog = .shared,
         actor: ActorRef = .coordinator,
@@ -119,7 +116,7 @@ public actor CalendarModifyTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: CalendarModifyArgs = try decode(argsJSON)
         let (result, preMod) = await gateway.executeCalendarModify(args)
 
@@ -137,9 +134,6 @@ public actor CalendarModifyTool: LLMTool {
             do {
                 _ = try await auditLog.recordAgentAction(action, source: "tool:calendar.modify")
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for calendar.modify:", error)
-                #endif
             }
         }
         return try wireOrThrow(result)
@@ -148,10 +142,10 @@ public actor CalendarModifyTool: LLMTool {
 
 // MARK: - calendar.delete (full autonomy; audit-logged per spec §11)
 
-public actor CalendarDeleteTool: LLMTool {
-    public let id = ToolID.calendarDelete.rawValue
-    public let description = "Delete a calendar event. Full agent autonomy; reasoning REQUIRED."
-    public let jsonSchemaForArgs = """
+actor CalendarDeleteTool: LLMTool {
+    let id = ToolID.calendarDelete.rawValue
+    let description = "Delete a calendar event. Full agent autonomy; reasoning REQUIRED."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"ekEventID":{"type":"string"},"reasoning":{"type":"string"}},"required":["ekEventID","reasoning"]}
     """
 
@@ -160,7 +154,7 @@ public actor CalendarDeleteTool: LLMTool {
     private let turnIDProvider: @Sendable () -> TurnID
     private let actorRef: ActorRef
 
-    public init(
+    init(
         gateway: EventKitGateway = .shared,
         auditLog: AuditLog = .shared,
         actor: ActorRef = .coordinator,
@@ -172,7 +166,7 @@ public actor CalendarDeleteTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: CalendarDeleteArgs = try decode(argsJSON)
         let (result, snapshot) = await gateway.executeCalendarDelete(args)
 
@@ -191,9 +185,6 @@ public actor CalendarDeleteTool: LLMTool {
                     source: "tool:calendar.delete"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for calendar.delete:", error)
-                #endif
             }
         }
         return try wireOrThrow(result)
@@ -202,10 +193,10 @@ public actor CalendarDeleteTool: LLMTool {
 
 // MARK: - reminder.create
 
-public actor ReminderCreateTool: LLMTool {
-    public let id = ToolID.reminderCreate.rawValue
-    public let description = "Create a Reminder (EKReminder)."
-    public let jsonSchemaForArgs = """
+actor ReminderCreateTool: LLMTool {
+    let id = ToolID.reminderCreate.rawValue
+    let description = "Create a Reminder (EKReminder)."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"title":{"type":"string"},"dueDate":{"type":"string","format":"date-time"},"notes":{"type":"string"},"listName":{"type":"string"},"reasoning":{"type":"string"}},"required":["title","reasoning"]}
     """
 
@@ -214,7 +205,7 @@ public actor ReminderCreateTool: LLMTool {
     private let turnIDProvider: @Sendable () -> TurnID
     private let actorRef: ActorRef
 
-    public init(
+    init(
         gateway: EventKitGateway = .shared,
         auditLog: AuditLog = .shared,
         actor: ActorRef = .coordinator,
@@ -226,7 +217,7 @@ public actor ReminderCreateTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: ReminderCreateArgs = try decode(argsJSON)
         let (result, payload) = await gateway.executeReminderCreate(args)
 
@@ -248,9 +239,6 @@ public actor ReminderCreateTool: LLMTool {
                     source: "tool:reminder.create"
                 )
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for reminder.create:", error)
-                #endif
             }
         }
         return try wireOrThrow(result)
@@ -259,10 +247,10 @@ public actor ReminderCreateTool: LLMTool {
 
 // MARK: - reminder.complete
 
-public actor ReminderCompleteTool: LLMTool {
-    public let id = ToolID.reminderComplete.rawValue
-    public let description = "Mark a Reminder complete."
-    public let jsonSchemaForArgs = """
+actor ReminderCompleteTool: LLMTool {
+    let id = ToolID.reminderComplete.rawValue
+    let description = "Mark a Reminder complete."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"ekReminderID":{"type":"string"},"reasoning":{"type":"string"}},"required":["ekReminderID","reasoning"]}
     """
 
@@ -271,7 +259,7 @@ public actor ReminderCompleteTool: LLMTool {
     private let turnIDProvider: @Sendable () -> TurnID
     private let actorRef: ActorRef
 
-    public init(
+    init(
         gateway: EventKitGateway = .shared,
         auditLog: AuditLog = .shared,
         actor: ActorRef = .coordinator,
@@ -283,7 +271,7 @@ public actor ReminderCompleteTool: LLMTool {
         self.turnIDProvider = turnIDProvider
     }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: ReminderCompleteArgs = try decode(argsJSON)
         let result = await gateway.executeReminderComplete(args)
 
@@ -305,9 +293,6 @@ public actor ReminderCompleteTool: LLMTool {
             do {
                 _ = try await auditLog.recordAgentAction(action, source: "tool:reminder.complete")
             } catch {
-                #if DEBUG
-                print("AuditLog write failed for reminder.complete:", error)
-                #endif
             }
         }
         return try wireOrThrow(result)
@@ -316,17 +301,17 @@ public actor ReminderCompleteTool: LLMTool {
 
 // MARK: - reminder.list (read-only — no audit row)
 
-public actor ReminderListTool: LLMTool {
-    public let id = ToolID.reminderList.rawValue
-    public let description = "List Reminders."
-    public let jsonSchemaForArgs = """
+actor ReminderListTool: LLMTool {
+    let id = ToolID.reminderList.rawValue
+    let description = "List Reminders."
+    let jsonSchemaForArgs = """
     {"type":"object","properties":{"listName":{"type":"string"},"completed":{"type":"boolean"}}}
     """
 
     private let gateway: EventKitGateway
-    public init(gateway: EventKitGateway = .shared) { self.gateway = gateway }
+    init(gateway: EventKitGateway = .shared) { self.gateway = gateway }
 
-    public func invoke(argsJSON: String) async throws -> String {
+    func invoke(argsJSON: String) async throws -> String {
         let args: ReminderListArgs
         if let data = argsJSON.data(using: .utf8),
            let parsed = try? JSONDecoder().decode(ReminderListArgs.self, from: data) {
@@ -384,7 +369,7 @@ private func wireOrThrow(_ result: CalendarToolResult) throws -> String {
 /// Track B's dispatcher catches this on the host side BEFORE the result reaches
 /// `LanguageModelSession`, runs the inline-grant flow, and retries the tool
 /// call once.
-public struct PermissionRequiredSignal: Error, Sendable {
-    public let scope: EKPermissionScope
-    public init(scope: EKPermissionScope) { self.scope = scope }
+struct PermissionRequiredSignal: Error, Sendable {
+    let scope: EKPermissionScope
+    init(scope: EKPermissionScope) { self.scope = scope }
 }

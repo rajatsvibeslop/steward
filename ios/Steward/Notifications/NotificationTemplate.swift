@@ -18,7 +18,7 @@
 
 import Foundation
 
-public enum NotificationKind: String, Codable, Sendable, CaseIterable {
+enum NotificationKind: String, Codable, Sendable, CaseIterable {
     case morningBrief
     case windDown
     case instrumentNudge
@@ -26,7 +26,7 @@ public enum NotificationKind: String, Codable, Sendable, CaseIterable {
     case recoveryNudge
 }
 
-public enum NotificationMode: String, Codable, Sendable, Equatable {
+enum NotificationMode: String, Codable, Sendable, Equatable {
     case normal
     case mercy
     case pause
@@ -34,17 +34,17 @@ public enum NotificationMode: String, Codable, Sendable, Equatable {
 
 /// Slots a tool call can fill into the template body without composing
 /// freeform copy. Only the values listed here are substitutable.
-public struct TemplateContext: Codable, Sendable, Equatable {
-    public var domainDisplayName: String?
-    public var instrumentName: String?
-    public var commitmentTitle: String?
-    public var lapseDays: Int?
+struct TemplateContext: Codable, Sendable, Equatable {
+    var domainDisplayName: String?
+    var instrumentName: String?
+    var commitmentTitle: String?
+    var lapseDays: Int?
     /// User's local time string for the brief (already rendered to "7am"
     /// upstream — templates never format times themselves so DST behavior
     /// is consistent with the chat UI).
-    public var briefTimeDisplay: String?
+    var briefTimeDisplay: String?
 
-    public init(
+    init(
         domainDisplayName: String? = nil,
         instrumentName: String? = nil,
         commitmentTitle: String? = nil,
@@ -61,13 +61,13 @@ public struct TemplateContext: Codable, Sendable, Equatable {
 
 /// Pure-function template renderer. No dependency on db / network / time —
 /// callers pass everything in so the body is deterministic.
-public enum NotificationTemplate {
-    public struct Rendered: Sendable, Equatable {
-        public let title: String
-        public let body: String
+enum NotificationTemplate {
+    struct Rendered: Sendable, Equatable {
+        let title: String
+        let body: String
     }
 
-    public static func render(
+    static func render(
         kind: NotificationKind,
         mode: NotificationMode,
         context: TemplateContext

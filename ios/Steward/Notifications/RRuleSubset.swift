@@ -19,18 +19,18 @@
 import Foundation
 import UserNotifications
 
-public struct RRuleSubset: Sendable, Codable, Equatable {
-    public enum Frequency: String, Codable, Sendable {
+struct RRuleSubset: Sendable, Codable, Equatable {
+    enum Frequency: String, Codable, Sendable {
         case daily = "DAILY"
     }
-    public enum Weekday: String, Codable, Sendable, CaseIterable {
+    enum Weekday: String, Codable, Sendable, CaseIterable {
         case monday = "MO", tuesday = "TU", wednesday = "WE",
              thursday = "TH", friday = "FR", saturday = "SA", sunday = "SU"
 
         /// Calendar weekday number (Sun = 1, Sat = 7) — what `DateComponents`
         /// expects. Note: this is Gregorian Calendar's default, which matches
         /// what `UNCalendarNotificationTrigger` reads.
-        public var calendarWeekday: Int {
+        var calendarWeekday: Int {
             switch self {
             case .sunday: return 1
             case .monday: return 2
@@ -43,14 +43,14 @@ public struct RRuleSubset: Sendable, Codable, Equatable {
         }
     }
 
-    public let frequency: Frequency
+    let frequency: Frequency
     /// Empty array means "any weekday" (effectively daily).
-    public let byDay: [Weekday]
+    let byDay: [Weekday]
     /// One BYHOUR value supported (RFC allows lists; we collapse to first).
-    public let byHour: Int
-    public let byMinute: Int
+    let byHour: Int
+    let byMinute: Int
 
-    public init(frequency: Frequency, byDay: [Weekday], byHour: Int, byMinute: Int) {
+    init(frequency: Frequency, byDay: [Weekday], byHour: Int, byMinute: Int) {
         self.frequency = frequency
         self.byDay = byDay
         self.byHour = byHour
@@ -58,7 +58,7 @@ public struct RRuleSubset: Sendable, Codable, Equatable {
     }
 }
 
-public enum RRuleParseError: Error, CustomStringConvertible, Equatable {
+enum RRuleParseError: Error, CustomStringConvertible, Equatable {
     case malformedRule(String)
     case unsupportedFrequency(String)
     case unsupportedKey(String)
@@ -68,7 +68,7 @@ public enum RRuleParseError: Error, CustomStringConvertible, Equatable {
     case missingByHour
     case missingByMinute
 
-    public var description: String {
+    var description: String {
         switch self {
         case .malformedRule(let s): return "Malformed RRULE: \(s)"
         case .unsupportedFrequency(let f): return "Unsupported FREQ=\(f). Only FREQ=DAILY supported."
@@ -82,10 +82,10 @@ public enum RRuleParseError: Error, CustomStringConvertible, Equatable {
     }
 }
 
-public enum RRuleParser {
+enum RRuleParser {
     /// Parse a single RRULE line. Leading "RRULE:" prefix is optional.
     /// Whitespace is trimmed. Keys are case-insensitive; values follow RFC 5545.
-    public static func parse(_ raw: String) throws -> RRuleSubset {
+    static func parse(_ raw: String) throws -> RRuleSubset {
         var input = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if input.uppercased().hasPrefix("RRULE:") {
             input = String(input.dropFirst("RRULE:".count))
@@ -162,7 +162,7 @@ public enum RRuleParser {
     /// Returns the `DateComponents` per trigger so the caller can construct
     /// `UNCalendarNotificationTrigger(dateMatching:repeats:)`. Pure function;
     /// safe to test without UserNotifications symbols.
-    public static func dateComponents(for rule: RRuleSubset) -> [DateComponents] {
+    static func dateComponents(for rule: RRuleSubset) -> [DateComponents] {
         if rule.byDay.isEmpty {
             var comps = DateComponents()
             comps.hour = rule.byHour
@@ -181,7 +181,7 @@ public enum RRuleParser {
 
     /// Convenience: build `UNCalendarNotificationTrigger` array. Each trigger
     /// has `repeats: true` because every component pattern is recurring.
-    public static func triggers(for rule: RRuleSubset) -> [UNCalendarNotificationTrigger] {
+    static func triggers(for rule: RRuleSubset) -> [UNCalendarNotificationTrigger] {
         dateComponents(for: rule).map {
             UNCalendarNotificationTrigger(dateMatching: $0, repeats: true)
         }

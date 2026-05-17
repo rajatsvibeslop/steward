@@ -26,12 +26,12 @@
 import Foundation
 import GRDB
 
-public enum AuditLogError: Error, CustomStringConvertible {
+enum AuditLogError: Error, CustomStringConvertible {
     case reasoningEmpty(actor: String, toolID: String)
     case encodingFailed(underlying: Error)
     case writeFailed(underlying: Error)
 
-    public var description: String {
+    var description: String {
         switch self {
         case .reasoningEmpty(let actor, let toolID):
             return "Audit log refused: agent action \(toolID) by \(actor) has empty reasoning."
@@ -45,13 +45,13 @@ public enum AuditLogError: Error, CustomStringConvertible {
 
 /// Process-wide audit log writer. Stateless except for an injected
 /// DatabaseProvider (for tests).
-public actor AuditLog {
-    public static let shared = AuditLog()
+actor AuditLog {
+    static let shared = AuditLog()
 
     private let provider: DatabaseProvider
     private let encoder: JSONEncoder
 
-    public init(provider: DatabaseProvider = .shared) {
+    init(provider: DatabaseProvider = .shared) {
         self.provider = provider
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
@@ -65,7 +65,7 @@ public actor AuditLog {
     /// `extraPayload` is merged into the JSON object alongside `turn_action`
     /// so tools can record tool-specific metadata (e.g. the new ek_event_id).
     @discardableResult
-    public func recordAgentAction(
+    func recordAgentAction(
         _ action: TurnAction,
         text: String? = nil,
         domain: String? = nil,
@@ -146,7 +146,7 @@ public actor AuditLog {
     /// original event_id and the inverse-action-result so the audit log
     /// preserves the chain (`undo`'s payload references the original).
     @discardableResult
-    public func recordUndo(
+    func recordUndo(
         originalEventID: EventID,
         undoneBy: ActorRef,
         reasoning: String,
@@ -204,7 +204,7 @@ public actor AuditLog {
     /// exists for that ID; throws if the row exists but its payload is
     /// malformed (so the caller can surface a UI hint rather than silently
     /// skipping undo).
-    public func loadTurnAction(eventID: EventID) async throws -> TurnAction? {
+    func loadTurnAction(eventID: EventID) async throws -> TurnAction? {
         let queue = try await provider.database()
         let json: String? = try await queue.read { db in
             try String.fetchOne(
@@ -226,7 +226,7 @@ public actor AuditLog {
     }
 
     /// `true` if a later event row with kind=`undo` references this event ID.
-    public func hasBeenUndone(eventID: EventID) async throws -> Bool {
+    func hasBeenUndone(eventID: EventID) async throws -> Bool {
         let queue = try await provider.database()
         return try await queue.read { db in
             // payload_json is small (KBs not MBs); LIKE-scan is fine for v1.
@@ -249,18 +249,18 @@ public actor AuditLog {
 
 /// Tiny `Codable` JSON wrapper so tools can attach arbitrary metadata to the
 /// event payload without us having to know every shape up front.
-public struct AnyEncodable: Codable, Sendable {
+struct AnyEncodable: Codable, Sendable {
     private let encoder: @Sendable (Encoder) throws -> Void
 
-    public init<T: Encodable & Sendable>(_ value: T) {
+    init<T: Encodable & Sendable>(_ value: T) {
         self.encoder = { enc in try value.encode(to: enc) }
     }
 
-    public func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
         try self.encoder(encoder)
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         // We only need encoding for AuditLog; provide a no-op decoder so
         // synthesized Codable conformance still works on enclosing types.
         let container = try decoder.singleValueContainer()

@@ -18,7 +18,7 @@ import Foundation
 
 /// Canonical tool identifiers used across tracks. Source of truth: spec §8.
 /// Track B's `ToolGuard` (addendum §1.8) validates by these rawValues.
-public enum ToolID: String, Codable, CaseIterable, Sendable {
+enum ToolID: String, Codable, CaseIterable, Sendable {
     // MARK: events
     case eventCapture          = "event.capture"
     case eventList             = "event.list"

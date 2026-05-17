@@ -31,9 +31,9 @@ import UIKit
 /// Returns the current `EKAuthorizationStatus` for an entity type. Production
 /// uses `EKEventStore.authorizationStatus(for:)`; tests inject a closure that
 /// returns scripted statuses for revocation-propagation tests.
-public typealias EKAuthorizationStatusProvider = @Sendable (EKEntityType) -> EKAuthorizationStatus
+typealias EKAuthorizationStatusProvider = @Sendable (EKEntityType) -> EKAuthorizationStatus
 
-public func liveAuthorizationStatusProvider() -> EKAuthorizationStatusProvider {
+func liveAuthorizationStatusProvider() -> EKAuthorizationStatusProvider {
     return { entityType in
         EKEventStore.authorizationStatus(for: entityType)
     }
@@ -43,7 +43,7 @@ public func liveAuthorizationStatusProvider() -> EKAuthorizationStatusProvider {
 
 /// Slice of EKEventStore that the gateway actually uses. Lets tests inject a
 /// fake without touching the real EventKit DB.
-public protocol EventStoreProtocol: AnyObject, Sendable {
+protocol EventStoreProtocol: AnyObject, Sendable {
     func requestFullAccessToEvents() async throws -> Bool
     func requestWriteOnlyAccessToEvents() async throws -> Bool
     func requestFullAccessToReminders() async throws -> Bool
@@ -85,9 +85,9 @@ public protocol EventStoreProtocol: AnyObject, Sendable {
 /// Bridge so production code keeps using `EKEventStore` directly.
 extension EKEventStore: @unchecked Sendable {}
 extension EKEventStore: EventStoreProtocol {
-    public func newEvent() -> EKEvent { EKEvent(eventStore: self) }
-    public func newReminder() -> EKReminder { EKReminder(eventStore: self) }
-    public func reminders(matching predicate: NSPredicate) async throws -> [EKReminder] {
+    func newEvent() -> EKEvent { EKEvent(eventStore: self) }
+    func newReminder() -> EKReminder { EKReminder(eventStore: self) }
+    func reminders(matching predicate: NSPredicate) async throws -> [EKReminder] {
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[EKReminder], Error>) in
             self.fetchReminders(matching: predicate) { reminders in
                 cont.resume(returning: reminders ?? [])
@@ -98,8 +98,8 @@ extension EKEventStore: EventStoreProtocol {
 
 // MARK: - The actor
 
-public actor EventKitGateway {
-    public static let shared = EventKitGateway()
+actor EventKitGateway {
+    static let shared = EventKitGateway()
 
     private var store: any EventStoreProtocol
     private let storeFactory: @Sendable () -> any EventStoreProtocol
@@ -111,7 +111,7 @@ public actor EventKitGateway {
     /// init (observers are added on whatever queue; we just forward).
     private var observersRegistered: Bool = false
 
-    public init(
+    init(
         storeFactory: @escaping @Sendable () -> any EventStoreProtocol = { EKEventStore() },
         statusProvider: @escaping EKAuthorizationStatusProvider = liveAuthorizationStatusProvider()
     ) {
@@ -123,13 +123,13 @@ public actor EventKitGateway {
 
     // MARK: - Public surface
 
-    public func status(for scope: EKPermissionScope) -> EKAuthorizationStatus {
+    func status(for scope: EKPermissionScope) -> EKAuthorizationStatus {
         statusProvider(scope.entityType)
     }
 
     /// Triggered by the UI inline-grant flow ONLY. Must NEVER be called during
     /// onboarding — that's HARD REJECT #17.
-    public func requestAccess(for scope: EKPermissionScope) async -> EKAuthorizationStatus {
+    func requestAccess(for scope: EKPermissionScope) async -> EKAuthorizationStatus {
         do {
             switch scope {
             case .calendarFullAccess:
@@ -137,11 +137,14 @@ public actor EventKitGateway {
             case .calendarWriteOnly:
                 _ = try await store.requestWriteOnlyAccessToEvents()
             case .remindersFullAccess, .remindersWriteOnly:
-                // EKEventStore only exposes requestFullAccessToReminders on
-                // iOS 17+; write-only reminders is an iOS 26 addition we
-                // surface as fullAccess for now to keep the build green on
-                // Xcode 16.3 SDK. Once iOS 26 SDK lands, swap in
-                // `requestWriteOnlyAccessToReminders()`.
+                // iOS 17+ exposes `requestFullAccessToReminders`; the
+                // write-only Reminders variant landed in iOS 26 SDK only
+                // (Xcode 26 toolchain). Track D builds on Xcode 16.3 / iOS
+                // 18.4, so both write-only and full-access scopes map to
+                // `requestFullAccessToReminders` until the toolchain bump.
+                // The mapping is upward-compatible: a user who granted
+                // full-access can satisfy a write-only request the same
+                // way iOS does internally.
                 _ = try await store.requestFullAccessToReminders()
             }
         } catch {
@@ -155,7 +158,7 @@ public actor EventKitGateway {
     /// Called by AppDelegate / NotificationCenter observers on foreground
     /// transitions. Compares current status to last-known and re-instantiates
     /// `store` if anything changed.
-    public func refreshIfAuthChanged() async {
+    func refreshIfAuthChanged() async {
         var changed = false
         for entityType: EKEntityType in [.event, .reminder] {
             let cur = statusProvider(entityType)
@@ -174,7 +177,7 @@ public actor EventKitGateway {
 
     // MARK: - Tool entry points
 
-    public func executeCalendarRead(_ args: CalendarReadArgs) async -> CalendarToolResult {
+    func executeCalendarRead(_ args: CalendarReadArgs) async -> CalendarToolResult {
         let scope: EKPermissionScope = .calendarFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -219,7 +222,7 @@ public actor EventKitGateway {
         }
     }
 
-    public func executeCalendarWrite(_ args: CalendarWriteArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
+    func executeCalendarWrite(_ args: CalendarWriteArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
         let scope: EKPermissionScope = .calendarFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -273,7 +276,7 @@ public actor EventKitGateway {
     /// Returns (result, pre-modification payload). Caller stores the payload
     /// in the InverseAction so undo can re-write the event to its previous
     /// state.
-    public func executeCalendarModify(_ args: CalendarModifyArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
+    func executeCalendarModify(_ args: CalendarModifyArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
         let scope: EKPermissionScope = .calendarFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -317,7 +320,7 @@ public actor EventKitGateway {
         return (.ok(payloadJSON: json), pre)
     }
 
-    public func executeCalendarDelete(_ args: CalendarDeleteArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
+    func executeCalendarDelete(_ args: CalendarDeleteArgs) async -> (CalendarToolResult, CalendarEventPayload?) {
         let scope: EKPermissionScope = .calendarFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -347,7 +350,7 @@ public actor EventKitGateway {
         return (.ok(payloadJSON: "{\"deleted\":true}"), snapshot)
     }
 
-    public func executeReminderCreate(_ args: ReminderCreateArgs) async -> (CalendarToolResult, ReminderPayload?) {
+    func executeReminderCreate(_ args: ReminderCreateArgs) async -> (CalendarToolResult, ReminderPayload?) {
         let scope: EKPermissionScope = .remindersFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -396,7 +399,7 @@ public actor EventKitGateway {
         return (.ok(payloadJSON: json), payload)
     }
 
-    public func executeReminderComplete(_ args: ReminderCompleteArgs) async -> CalendarToolResult {
+    func executeReminderComplete(_ args: ReminderCompleteArgs) async -> CalendarToolResult {
         let scope: EKPermissionScope = .remindersFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -419,7 +422,7 @@ public actor EventKitGateway {
     /// undo path for `reminder.complete`. Public so `UndoExecutor` can reach
     /// it without re-implementing the EventKit call there (which would be
     /// HARD REJECT #18 territory).
-    public func executeReminderReopen(ekReminderID: String) async -> CalendarToolResult {
+    func executeReminderReopen(ekReminderID: String) async -> CalendarToolResult {
         let scope: EKPermissionScope = .remindersFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -439,7 +442,7 @@ public actor EventKitGateway {
     }
 
     /// Delete a reminder. Used by the undo path for `reminder.create`.
-    public func executeReminderDelete(ekReminderID: String) async -> CalendarToolResult {
+    func executeReminderDelete(ekReminderID: String) async -> CalendarToolResult {
         let scope: EKPermissionScope = .remindersFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break
@@ -457,7 +460,7 @@ public actor EventKitGateway {
         return .ok(payloadJSON: "{\"deleted\":true}")
     }
 
-    public func executeReminderList(_ args: ReminderListArgs) async -> CalendarToolResult {
+    func executeReminderList(_ args: ReminderListArgs) async -> CalendarToolResult {
         let scope: EKPermissionScope = .remindersFullAccess
         switch await gateCheck(scope: scope) {
         case .ok: break

@@ -17,24 +17,24 @@
 import Foundation
 import BackgroundTasks
 
-public enum BGIdentifier {
-    public static let refresh = "com.rajatscode.steward.refresh"
-    public static let processing = "com.rajatscode.steward.processing"
+enum BGIdentifier {
+    static let refresh = "com.rajatscode.steward.refresh"
+    static let processing = "com.rajatscode.steward.processing"
 }
 
-public actor BGTaskCoordinator {
-    public static let shared = BGTaskCoordinator()
+actor BGTaskCoordinator {
+    static let shared = BGTaskCoordinator()
 
     private let scheduler: NotificationScheduler
     /// Track F drains this; we keep an optional reference so that when F
     /// lands it can be wired in without touching Track D code.
     private var syncDrainer: (@Sendable () async -> Void)?
 
-    public init(scheduler: NotificationScheduler = .shared) {
+    init(scheduler: NotificationScheduler = .shared) {
         self.scheduler = scheduler
     }
 
-    public func setSyncDrainer(_ drainer: @escaping @Sendable () async -> Void) {
+    func setSyncDrainer(_ drainer: @escaping @Sendable () async -> Void) {
         self.syncDrainer = drainer
     }
 
@@ -45,7 +45,7 @@ public actor BGTaskCoordinator {
     /// from BGTaskScheduler — the `@MainActor`-isolated bootstrap is the
     /// single chokepoint.
     @MainActor
-    public static func registerHandlers() {
+    static func registerHandlers() {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: BGIdentifier.refresh,
             using: nil
@@ -75,7 +75,7 @@ public actor BGTaskCoordinator {
     // MARK: - Scheduling
 
     /// Submit the next BGAppRefreshTask. Best-effort — iOS may decline.
-    public func scheduleNextRefresh(after seconds: TimeInterval = 60 * 60) {
+    func scheduleNextRefresh(after seconds: TimeInterval = 60 * 60) {
         let request = BGAppRefreshTaskRequest(identifier: BGIdentifier.refresh)
         request.earliestBeginDate = Date(timeIntervalSinceNow: seconds)
         do {
@@ -84,15 +84,12 @@ public actor BGTaskCoordinator {
             // BGTaskScheduler returns errors for already-submitted tasks
             // (.tooManyPendingTaskRequests = 3) which is fine to swallow;
             // any real failure surfaces here for the next foreground tick.
-            #if DEBUG
-            print("BGAppRefreshTaskRequest submit failed:", error)
-            #endif
         }
     }
 
     /// Foreground tick driver. Call from `.task` on RootView OR from
     /// `UIApplication.didBecomeActiveNotification`. Idempotent.
-    public func foregroundTick() async {
+    func foregroundTick() async {
         await scheduler.topUpHorizon(daysAhead: 7)
         scheduleNextRefresh()
         if let drainer = syncDrainer {

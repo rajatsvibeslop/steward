@@ -14,8 +14,8 @@
 
 import Foundation
 
-public actor UndoExecutor {
-    public static let shared = UndoExecutor()
+actor UndoExecutor {
+    static let shared = UndoExecutor()
 
     private let provider: DatabaseProvider
     private let auditLog: AuditLog
@@ -23,7 +23,7 @@ public actor UndoExecutor {
     private let scheduler: NotificationScheduler
     private let turnIDProvider: @Sendable () -> TurnID
 
-    public init(
+    init(
         provider: DatabaseProvider = .shared,
         auditLog: AuditLog = .shared,
         gateway: EventKitGateway = .shared,
@@ -43,7 +43,7 @@ public actor UndoExecutor {
     /// - `.notFound` if no audit row exists
     /// - `.blockedByDependents` if cascades remain (v1: always empty, so this
     ///   never fires unless callers populate cascades)
-    public func undo(eventID: EventID, undoneBy: ActorRef, reasoning: String) async throws -> UndoOutcome {
+    func undo(eventID: EventID, undoneBy: ActorRef, reasoning: String) async throws -> UndoOutcome {
         if try await auditLog.hasBeenUndone(eventID: eventID) {
             return .alreadyUndone(originalEventID: eventID)
         }

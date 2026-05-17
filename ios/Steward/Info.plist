@@ -49,16 +49,12 @@
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Steward turns chat-spoken commitments into Reminders that show up on your lock screen.</string>
 
-	<!-- HealthKit (v1.1 — read-only spike for sleep, body mass, step count) -->
+	<!-- HealthKit (v1.1 — read-only spike for sleep, body mass, step count).
+	     Read key only; the gateway never calls `requestAuthorization` with a
+	     non-empty `toShare:` set, so the OS never asks for write permission
+	     and the Update usage key would be unused / misleading at review. -->
 	<key>NSHealthShareUsageDescription</key>
 	<string>Steward reads your sleep, weight, and step count from Apple Health so your Health domain doesn't need manual logging.</string>
-	<!-- We don't currently write to Health, but some provisioning / signing flows
-	     warn when only the share key is present. Declaring update too keeps
-	     codesign + App Store Connect happy without enabling any writes (the
-	     gateway has no `requestAuthorization(toShare:read:)` call with a
-	     non-nil share set). -->
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>Steward does not currently write to Apple Health; this entry is declared for signing only.</string>
 
 	<!-- Voice capture -->
 	<key>NSMicrophoneUsageDescription</key>

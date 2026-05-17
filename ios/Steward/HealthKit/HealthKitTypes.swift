@@ -10,10 +10,17 @@
 //   - `.permissionDenied` / `.systemError` are LLM-visible structured tool
 //     errors so the model picks a sensible recovery path.
 //
-//  Scope and quantity surfaces are narrow on purpose: this spike reads only
+//  Scope and sample surfaces are narrow on purpose: this spike reads only
 //  sleep analysis (HKCategoryType), body mass, and step count. Adding more
-//  types means widening `HealthQuantityKind` AND `HealthPermissionScope`
+//  types means widening `HealthSampleKind` AND `HealthPermissionScope`
 //  together so the gate-check stays exhaustive.
+//
+//  Naming note: the kind enum is `HealthSampleKind` (not `…QuantityKind`)
+//  because `.sleep` routes to `HKCategoryType` (sleepAnalysis), not a
+//  quantity sample. The tool ID `health.read_quantity` is intentionally NOT
+//  renamed — it's wire-visible (LLM prompts, audit log) and changing it
+//  would invalidate prior tool-call transcripts. Internal type names are
+//  free to be accurate.
 //
 
 import Foundation
@@ -49,10 +56,14 @@ enum HealthPermissionScope: String, Codable, Sendable, Equatable, CaseIterable {
     }
 }
 
-/// The three quantity surfaces the LLM may request. String-backed so the
+/// The three sample surfaces the LLM may request. String-backed so the
 /// `health.read_quantity` tool can route on a stable JSON token without ever
-/// switching on a raw `HKQuantityTypeIdentifier`.
-enum HealthQuantityKind: String, Codable, Sendable, Equatable, CaseIterable {
+/// switching on a raw `HKQuantityTypeIdentifier` or `HKCategoryTypeIdentifier`.
+///
+/// `.sleep` routes to `HKCategoryType.sleepAnalysis`; `.bodyMass` and
+/// `.stepCount` route to `HKQuantityType` — hence "sample" rather than
+/// "quantity" in the name.
+enum HealthSampleKind: String, Codable, Sendable, Equatable, CaseIterable {
     case sleep        = "sleep"
     case bodyMass     = "body_mass"
     case stepCount    = "step_count"
@@ -92,47 +103,6 @@ enum HealthToolResult: Sendable {
 }
 
 extension HealthToolResult {
-    /// LLM-safe wire representation. `.permissionRequired` is omitted so the
-    /// case cannot leak back into the model — the dispatcher must intercept
-    /// it host-side and run the inline-grant flow.
-    func wireJSON() throws -> String? {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.sortedKeys]
-        struct Body: Codable {
-            let status: String
-            let scope: String
-            let hint: String
-        }
-        switch self {
-        case .ok(let payload):
-            return payload
-        case .permissionRequired:
-            return nil
-        case .permissionDenied(let scope, let hint):
-            let data = try enc.encode(Body(
-                status: "permission_denied",
-                scope: scope.rawValue,
-                hint: hint
-            ))
-            return String(data: data, encoding: .utf8)
-        case .systemError(let scope, let hint):
-            let data = try enc.encode(Body(
-                status: "system_error",
-                scope: scope.rawValue,
-                hint: hint
-            ))
-            return String(data: data, encoding: .utf8)
-        }
-    }
-
-    var isPermissionRequired: Bool {
-        if case .permissionRequired = self { return true }
-        return false
-    }
-}
-
-extension HealthToolResult {
     static func denied(_ scope: HealthPermissionScope) -> HealthToolResult {
         let hint = "Health access is off. Open Settings → Privacy → Health → Steward to grant access."
         return .permissionDenied(scope: scope, hint: hint)
@@ -149,7 +119,7 @@ extension HealthToolResult {
 ///   - Codable with exhaustive keys (Decoder fails closed on unknown keys
 ///     when the LLM hallucinates a field).
 struct HealthReadQuantityArgs: Codable, Sendable, Equatable {
-    var type: HealthQuantityKind
+    var type: HealthSampleKind
     var start: Date
     var end: Date
     var reasoning: String

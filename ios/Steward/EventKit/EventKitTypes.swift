@@ -42,41 +42,6 @@ enum CalendarToolResult: Sendable {
     case systemError(scope: EKPermissionScope, hint: String)
 }
 
-extension CalendarToolResult {
-    /// LLM-safe wire representation. `permissionRequired` is omitted so this
-    /// surface cannot leak it back into the model.
-    func wireJSON() throws -> String? {
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.sortedKeys]
-        struct Body: Codable {
-            let status: String
-            let scope: String
-            let hint: String
-        }
-        switch self {
-        case .ok(let payload):
-            return payload
-        case .permissionRequired:
-            // Hard reject #19: never serialize this for the LLM.
-            return nil
-        case .permissionDenied(let scope, let hint):
-            let data = try enc.encode(Body(status: "permission_denied",
-                                            scope: scope.rawValue, hint: hint))
-            return String(data: data, encoding: .utf8)
-        case .systemError(let scope, let hint):
-            let data = try enc.encode(Body(status: "system_error",
-                                            scope: scope.rawValue, hint: hint))
-            return String(data: data, encoding: .utf8)
-        }
-    }
-
-    var isPermissionRequired: Bool {
-        if case .permissionRequired = self { return true }
-        return false
-    }
-}
-
 // MARK: - Tool argument structs
 
 struct CalendarReadArgs: Codable, Sendable {

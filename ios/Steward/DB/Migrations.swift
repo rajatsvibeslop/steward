@@ -84,6 +84,13 @@ enum Migrations {
 
     // MARK: - memory_items (distilled retrievable facts)
 
+    // Writer contract (no SQL DEFAULTs by design — convention belongs in the
+    // record layer, not the schema):
+    // - `created_at` and `last_strength_update_at` MUST be set on insert by
+    //   the caller to `Int64(Date().timeIntervalSince1970 * 1000)`.
+    // - `strength_at_last_update` defaults to 1.0 in SQL because that's the
+    //   spec's "new memory" value; effective strength is computed lazily at
+    //   query time via `MemoryItem.effectiveStrength(now:)` (addendum §1.5).
     private static func createMemoryItemsTable(_ db: Database) throws {
         try db.execute(sql: """
             CREATE TABLE memory_items (
@@ -110,6 +117,9 @@ enum Migrations {
             CREATE INDEX memory_strength_lazy
             ON memory_items(strength_at_last_update DESC, last_strength_update_at)
         """)
+        // Pod C does an `embedding_revision != ?` sweep on launch (addendum
+        // §2.3 lazy-rebuild). Index keeps that cheap.
+        try db.execute(sql: "CREATE INDEX memory_embedding_revision ON memory_items(embedding_revision)")
 
         // FTS5 with full INSERT / DELETE / UPDATE triggers — memories mutate
         // (strength bumps, forgets, text rewrites).
@@ -266,9 +276,11 @@ enum Migrations {
             )
         """)
         // Seed the row with defaults. Domain bootstrap is intentionally empty
-        // (spec §16 — no pre-seeded domains).
+        // (spec §16 — no pre-seeded domains). INSERT OR IGNORE keeps the
+        // migration safe to re-run defensively, even though GRDB's migrator
+        // already guarantees each named migration runs once.
         try db.execute(
-            sql: "INSERT INTO settings (id, settings_json) VALUES (1, ?)",
+            sql: "INSERT OR IGNORE INTO settings (id, settings_json) VALUES (1, ?)",
             arguments: [SettingsDefaults.json]
         )
     }

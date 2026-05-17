@@ -199,6 +199,7 @@ final class SchemaTests: XCTestCase {
             "events_instrument",
             "memory_domain",
             "memory_strength_lazy",
+            "memory_embedding_revision",
             "instruments_domain",
             "commitments_status",
             "notifications_scheduled",

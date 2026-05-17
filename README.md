@@ -23,7 +23,7 @@ Foundation Models is gated behind a protocol (`LLMSession` / `LLMResolver`). Wit
 
 ## Build + deploy
 
-Full step-by-step including Xcode 26 beta install, WhisperKit model fetch, deployment-target bump, signing, and the 14-item self-QA checklist: **[`docs/sunday-morning-startup.md`](docs/sunday-morning-startup.md)**. Read that first.
+Full step-by-step including Xcode 26 beta install, WhisperKit model fetch, deployment-target bump, signing, and the 14-item self-QA checklist: **[`docs/sunday-morning-startup.md`](docs/sunday-morning-startup.md)**. Read that first. Then, once the app is on your phone: **[`docs/first-morning.md`](docs/first-morning.md)** walks through what the coordinator will say and how to spawn your first team.
 
 Short version:
 

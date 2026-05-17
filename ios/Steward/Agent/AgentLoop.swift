@@ -48,6 +48,39 @@ public actor SharedBudget {
     }
 }
 
+// MARK: - Runtime settings (mercy + pause) reader
+
+/// Reads the live mercy + pause window from settings so each turn's
+/// runtime context reflects the user's current toggle state. Returns
+/// `(.off, nil)` if settings can't be loaded — the safer-by-default
+/// posture for a single-user app is "no behavioral softening" rather
+/// than crashing the turn.
+///
+/// Production default: `SettingsStore.shared`. Tests inject a closure
+/// that returns whatever shape they're asserting on, without having
+/// to stand up a real DB.
+public typealias RuntimeSettingsReader = @Sendable (_ now: Date) async -> (mercy: MercyMode, pauseUntil: Date?)
+
+/// Default reader that consults `SettingsStore.shared`. Treats a past
+/// `mercyModeUntil` / `pauseUntil` as expired (off / nil).
+@Sendable
+public func defaultRuntimeSettingsReader(now: Date) async -> (mercy: MercyMode, pauseUntil: Date?) {
+    let settings = try? await SettingsStore.shared.load()
+    let mercy: MercyMode
+    if let until = settings?.mercyModeUntil, until > now {
+        mercy = .on(until: until)
+    } else {
+        mercy = .off
+    }
+    let pauseUntil: Date?
+    if let pause = settings?.pauseUntil, pause > now {
+        pauseUntil = pause
+    } else {
+        pauseUntil = nil
+    }
+    return (mercy, pauseUntil)
+}
+
 // MARK: - Domain resolution
 
 /// Looks up an active `DomainAgent` by domain identifier. Track C / Pod E
@@ -83,6 +116,7 @@ public actor AgentLoop {
     private let clock: @Sendable () -> Date
     private let timezone: TimeZone
     private let turnIDGen: @Sendable () -> String
+    private let settingsReader: RuntimeSettingsReader
 
     /// Conversation state threaded across turns. Tests can seed it via the
     /// `initialState` init arg.
@@ -97,7 +131,8 @@ public actor AgentLoop {
         clock: @escaping @Sendable () -> Date = { Date() },
         timezone: TimeZone = .autoupdatingCurrent,
         turnIDGen: @escaping @Sendable () -> String = { UUID().uuidString },
-        initialState: ConversationState = .awaitingFirstMessage
+        initialState: ConversationState = .awaitingFirstMessage,
+        settingsReader: @escaping RuntimeSettingsReader = defaultRuntimeSettingsReader
     ) {
         self.factory = factory
         self.registry = registry
@@ -108,6 +143,7 @@ public actor AgentLoop {
         self.timezone = timezone
         self.turnIDGen = turnIDGen
         self.conversationState = initialState
+        self.settingsReader = settingsReader
     }
 
     /// Run one user turn through the coordinator. Throws on session-level
@@ -117,6 +153,7 @@ public actor AgentLoop {
         let turnID = TurnID(rawValue: turnIDGen())
         let now = clock()
         let activeDomains = await resolver.listActive()
+        let (mercy, pauseUntil) = await settingsReader(now)
 
         // Pre-LLM deterministic routing — only relevant when no domains
         // exist yet (empty state). Once at least one domain exists, the
@@ -142,8 +179,8 @@ public actor AgentLoop {
             localTimezone: timezone,
             conversationState: conversationState,
             emptyStateBranch: branch,
-            mercyMode: .off,         // Pod D wires the real read from SettingsStore
-            pauseUntil: nil,
+            mercyMode: mercy,
+            pauseUntil: pauseUntil,
             activeDomains: activeDomains,
             openCommitments: [],
             recentEventsSummary: nil,
@@ -173,7 +210,8 @@ public actor AgentLoop {
             factory: factory,
             temperature: temperature,
             timezone: timezone,
-            clock: clock
+            clock: clock,
+            settingsReader: settingsReader
         ))
 
         let session = try await factory.makeSession(
@@ -349,6 +387,27 @@ public struct AgentHandoffTool: LLMTool {
     let temperature: Double
     let timezone: TimeZone
     let clock: @Sendable () -> Date
+    let settingsReader: RuntimeSettingsReader
+
+    public init(
+        budget: SharedBudget,
+        resolver: any DomainAgentResolver,
+        registry: any ToolRegistry,
+        factory: any LLMSessionFactory,
+        temperature: Double,
+        timezone: TimeZone,
+        clock: @escaping @Sendable () -> Date,
+        settingsReader: @escaping RuntimeSettingsReader = defaultRuntimeSettingsReader
+    ) {
+        self.budget = budget
+        self.resolver = resolver
+        self.registry = registry
+        self.factory = factory
+        self.temperature = temperature
+        self.timezone = timezone
+        self.clock = clock
+        self.settingsReader = settingsReader
+    }
 
     public func invoke(argsJSON: String) async throws -> String {
         // Parse args defensively — malformed JSON → structured error
@@ -386,13 +445,15 @@ public struct AgentHandoffTool: LLMTool {
         // Build a domain runtime context for this hop. Carry only what
         // the domain needs; no transcript replay in v1.
         let activeDomains = await resolver.listActive()
+        let now = clock()
+        let (mercy, pauseUntil) = await settingsReader(now)
         let runtime = RuntimeContext(
-            now: clock(),
+            now: now,
             localTimezone: timezone,
             conversationState: .inFreeChat,
             emptyStateBranch: nil,
-            mercyMode: .off,
-            pauseUntil: nil,
+            mercyMode: mercy,
+            pauseUntil: pauseUntil,
             activeDomains: activeDomains,
             openCommitments: [],
             recentEventsSummary: nil,

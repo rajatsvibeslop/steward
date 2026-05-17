@@ -37,6 +37,16 @@ enum Migrations {
             try createSettingsTable(db)
         }
 
+        // v2 — Track D: NotificationScheduler.topUpHorizon needs persistent
+        // recurring rules so the next 7+ days of notifications can be
+        // re-issued on every foreground tick. Without this, BGTasks failing
+        // in install week silently kills the morning brief. Pod A's v1 had
+        // no rule-persistence table; v2 adds one. Additive, no production
+        // data exists.
+        migrator.registerMigration("v2_notification_recurring_rules") { db in
+            try createNotificationRecurringRulesTable(db)
+        }
+
         return migrator
     }()
 
@@ -300,6 +310,39 @@ enum Migrations {
             sql: "INSERT OR IGNORE INTO settings (id, settings_json) VALUES (1, ?)",
             arguments: [SettingsDefaults.json]
         )
+    }
+}
+
+extension Migrations {
+    // MARK: - notification_recurring_rules (Track D, v2)
+    //
+    // One row per active recurring notification (RRULE subset). Each row is
+    // the "rule of record" — NotificationScheduler.topUpHorizon re-expands
+    // active rules into the next horizon on every foreground tick. Cancelled
+    // rules are kept (cancelled_at IS NOT NULL) so the audit log can still
+    // resolve the rule's history.
+
+    fileprivate static func createNotificationRecurringRulesTable(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE notification_recurring_rules (
+                rule_id               TEXT PRIMARY KEY,
+                rrule                 TEXT NOT NULL,
+                kind                  TEXT NOT NULL,
+                domain                TEXT,
+                instrument_id         TEXT,
+                template_context_json TEXT NOT NULL,
+                action_context_json   TEXT,
+                priority              INTEGER NOT NULL DEFAULT 0,
+                scope_actor           TEXT NOT NULL DEFAULT 'coordinator',
+                created_at            INTEGER NOT NULL,
+                cancelled_at          INTEGER
+            )
+        """)
+        try db.execute(sql: """
+            CREATE INDEX notification_recurring_active
+            ON notification_recurring_rules(kind, created_at)
+            WHERE cancelled_at IS NULL
+        """)
     }
 }
 

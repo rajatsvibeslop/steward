@@ -12,6 +12,14 @@ import SwiftUI
 struct StewardApp: App {
     @StateObject private var bootstrap = AppBootstrap()
 
+    init() {
+        // BGTaskScheduler.register MUST be called before
+        // application(_:didFinishLaunchingWithOptions:) returns. SwiftUI's
+        // App.init runs at that point, so we register here. Registering
+        // twice raises an Objective-C exception — keep this the single site.
+        BGTaskCoordinator.registerHandlers()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -41,6 +49,10 @@ final class AppBootstrap: ObservableObject {
     func start() async {
         guard phase == .idle else { return }
         phase = .opening
+        // Register all instrument kinds before any agent / view code can
+        // dispatch an instrument event. Addendum §1.2 says this happens at
+        // @main; the bootstrap object is the @main proxy.
+        InstrumentRegistry.bootstrapAll()
         do {
             _ = try await DatabaseProvider.shared.database()
 
@@ -53,6 +65,11 @@ final class AppBootstrap: ObservableObject {
         } catch {
             phase = .failed(message: String(describing: error))
         }
+        // Whether the DB came up or not, kick the foreground tick so the
+        // notification scheduler tops up its horizon. The scheduler doesn't
+        // require the DB to function — it reads settings via SettingsStore
+        // which surfaces a typed error if the DB is sick.
+        await BGTaskCoordinator.shared.foregroundTick()
     }
 }
 

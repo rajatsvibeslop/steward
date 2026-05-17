@@ -46,6 +46,13 @@ struct ChatView: View {
             .task {
                 await viewModel.loadInitialState()
                 await refreshVoiceAvailability()
+                // Cold-launch case: a tap that delivered before SwiftUI
+                // subscribed to .stewardNotificationTapped lives in the
+                // router's buffer. Drain it now so the very first ChatView
+                // appearance honors the routing.
+                if let buffered = NotificationActionRouter.shared.takeLastTapEvent() {
+                    viewModel.acceptNotificationTap(buffered)
+                }
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: .voiceCaptureReadinessChanged
@@ -54,6 +61,24 @@ struct ChatView: View {
                 // completes (success or fail). Re-read availability so the
                 // mic flips from disabled-with-tooltip to active when ready.
                 Task { await refreshVoiceAvailability() }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: .stewardNotificationTapped
+            )) { note in
+                // Live case: app already running, user tapped a banner.
+                // Pull the typed event off the post payload directly.
+                // Note: we deliberately do NOT call
+                // `NotificationActionRouter.shared.takeLastTapEvent()`
+                // here — every live tap also updates the buffer, and
+                // draining it would race with the .task drain on the
+                // next ChatView appearance (and break unit tests that
+                // assert against `lastTapEvent` while the host app
+                // happens to have ChatView mounted).
+                if let event = note.userInfo?[
+                    NotificationActionRouter.tapEventUserInfoKey
+                ] as? NotificationActionRouter.TapEvent {
+                    viewModel.acceptNotificationTap(event)
+                }
             }
         }
     }

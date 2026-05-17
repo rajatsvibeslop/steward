@@ -14,5 +14,14 @@
 	<array>
 		<string>iCloud.com.rajatscode.steward</string>
 	</array>
+	<!-- HealthKit (v1.1 read-only spike). We declare per-type read permissions
+	     via HKObjectType in the gateway's request flow, not via the
+	     `com.apple.developer.healthkit.access` array — that array is for
+	     access categories beyond standard read/write (e.g. clinical records),
+	     which we do not use. -->
+	<key>com.apple.developer.healthkit</key>
+	<true/>
+	<key>com.apple.developer.healthkit.access</key>
+	<array/>
 </dict>
 </plist>

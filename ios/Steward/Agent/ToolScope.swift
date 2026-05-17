@@ -61,6 +61,9 @@ public enum ToolID: String, Sendable, Codable, CaseIterable, Hashable {
     case reminderComplete = "reminder.complete"
     case reminderList     = "reminder.list"
 
+    // HealthKit (v1.1 read-only spike — sleep, body mass, step count)
+    case healthReadQuantity = "health.read_quantity"
+
     // CSV mirror
     case csvMirrorEnsureInstrumentFile = "csv_mirror.ensure_instrument_file"
     case csvMirrorSyncNow              = "csv_mirror.sync_now"
@@ -146,6 +149,11 @@ public struct ToolScope: Sendable, Codable, Equatable {
             .notificationSchedule, .notificationCancel, .notificationListUpcoming,
             .calendarRead, .reminderList, .reminderCreate,
             .csvMirrorEnsureInstrumentFile,
+            // HealthKit (read-only) — every domain agent may read Health data;
+            // there's no domain-pin because Health samples are not scoped to a
+            // single domain (a Wellbeing agent and a Sleep agent both want sleep
+            // samples). The gateway gates on user permission, not domain.
+            .healthReadQuantity,
         ]
         let pinDomain = ArgConstraints(fixedArgs: ["domain": .string(domain)])
         let constraints: [ToolID: ArgConstraints] = [

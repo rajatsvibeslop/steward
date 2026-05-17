@@ -162,6 +162,9 @@ enum ToolCallSummaryBuilder {
             return ("set quiet hours", "\(start)–\(end)")
         case .webSearch:
             return ("searched the web", args["query"] ?? "for something")
+        case .healthReadQuantity:
+            let kind = args["type"] ?? "health data"
+            return ("checked", "Apple Health \(kind)")
         }
         // Note: no `default` — adding a ToolID case is a compile error
         // (§4 hard reject #9).
@@ -192,7 +195,8 @@ enum ToolCallSummaryBuilder {
              .domainList,
              .agentHandoff, .agentCrossConsult,
              .mercyModeEngage, .pauseEngage, .quietHoursSet,
-             .webSearch:
+             .webSearch,
+             .healthReadQuantity:
             return false
         }
     }
@@ -214,7 +218,8 @@ enum ToolCallSummaryBuilder {
              .csvMirrorEnsureInstrumentFile, .csvMirrorSyncNow, .csvMirrorReadOverrides,
              .domainCreate, .domainList, .domainUpdatePrompt, .domainArchive,
              .agentHandoff, .agentCrossConsult,
-             .mercyModeEngage, .pauseEngage, .quietHoursSet, .webSearch:
+             .mercyModeEngage, .pauseEngage, .quietHoursSet, .webSearch,
+             .healthReadQuantity:
             return false
         }
     }

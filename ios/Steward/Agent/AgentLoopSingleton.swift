@@ -119,6 +119,13 @@ public actor AgentLoopHost {
         await registry.register(notifCancel, as: .notificationCancel)
         await registry.register(notifList, as: .notificationListUpcoming)
 
+        // Track D (v1.1) — HealthKit read-only. The gateway holds an HKHealthStore;
+        // the tool dispatches through it just like the calendar tools dispatch
+        // through EventKitGateway. Per-turn instantiation isn't needed — the
+        // gateway is a process-wide actor.
+        let healthRead = HealthReadQuantityTool()
+        await registry.register(healthRead, as: .healthReadQuantity)
+
         let resolver = DBDomainAgentResolver()
         let temperature: Double
         do {

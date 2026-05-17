@@ -20,6 +20,7 @@ enum CSVMirrorToolError: Error, CustomStringConvertible {
     case settingsLoadFailed(underlying: Error)
     case watcherNotInitialized
     case mirrorDisabled
+    case unknownOperation(String)
 
     var description: String {
         switch self {
@@ -29,6 +30,8 @@ enum CSVMirrorToolError: Error, CustomStringConvertible {
             return "CSVMirrorTools used before bootstrap — call configure(watcher:) at app launch"
         case .mirrorDisabled:
             return "CSV mirror disabled via Settings.csvMirrorEnabled — tool call ignored"
+        case .unknownOperation(let op):
+            return "Unknown csv_mirror sync_queue operation '\(op)'"
         }
     }
 }
@@ -100,6 +103,11 @@ actor CSVMirrorTools {
             let operation: String = row["operation"] ?? ""
             let payload: String = row["payload_json"] ?? "{}"
             do {
+                // Note: `write_event_log_csv` is NOT handled here — the monthly
+                // partitioned event log is v1.1 work, so we deliberately do
+                // not accept that operation. If a queue row with an unknown
+                // operation lands, mark it completed-with-error so the
+                // workflow doesn't spin on the same row every drain.
                 switch operation {
                 case "write_instrument_csv":
                     if let instrumentID = decodeInstrumentID(from: payload) {
@@ -109,13 +117,8 @@ actor CSVMirrorTools {
                     if let instrumentID = decodeInstrumentID(from: payload) {
                         _ = try await watcher.reconcile(instrumentID: instrumentID)
                     }
-                case "write_event_log_csv":
-                    // Event log partition writing deferred to v1.1 — for now we
-                    // mark the row completed without effect so it doesn't
-                    // re-trigger on every drain.
-                    break
                 default:
-                    break
+                    throw CSVMirrorToolError.unknownOperation(operation)
                 }
                 try await markCompleted(queueID: queueID, error: nil)
                 processed += 1

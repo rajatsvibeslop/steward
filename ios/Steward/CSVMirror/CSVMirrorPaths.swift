@@ -168,9 +168,16 @@ struct CSVMirrorPaths: Sendable {
         if name.rangeOfCharacter(from: unsafeChars) != nil {
             throw CSVMirrorPathError.invalidInstrumentName(name)
         }
-        // `..` traversal guard. We compare segments, not just substrings, so
-        // legitimate names like "rangefinder..hobby" (silly but legal) pass.
-        for segment in name.split(separator: ".") where segment.isEmpty {
+        // `..` and `.` traversal guard. Reject literal directory-traversal
+        // names AND any name containing `..` between segments — `split` with
+        // `omittingEmptySubsequences: false` so the empty subsequence between
+        // consecutive dots actually surfaces.
+        if name == "." || name == ".." {
+            throw CSVMirrorPathError.invalidInstrumentName(name)
+        }
+        for segment in name.split(separator: ".", omittingEmptySubsequences: false)
+            where segment.isEmpty
+        {
             throw CSVMirrorPathError.invalidInstrumentName(name)
         }
     }

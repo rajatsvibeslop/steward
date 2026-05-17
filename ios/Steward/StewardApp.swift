@@ -63,6 +63,10 @@ final class AppBootstrap: ObservableObject {
 /// hold-to-talk tap feels instant.
 enum TrackFBootstrap {
     static func run() async {
+        // 0. Register stub instrument-kind coders so reconciliation has
+        //    something to dispatch on before Track C ships. REMOVE AT MERGE.
+        await registerStubCoders()
+
         // 1. Load settings to honor csv_mirror_enabled / icloud_drive_folder.
         let settings: Settings
         do {
@@ -100,5 +104,17 @@ enum TrackFBootstrap {
         Task.detached(priority: .utility) {
             await VoiceCaptureService.shared.initializeIfNeeded()
         }
+    }
+
+    /// REMOVE AT MERGE — Pod C provides canonical InstrumentCSVCoder
+    /// registrations from their `InstrumentKind` registry boot path. This
+    /// helper is paired with `_Stubs/StubRunningAccumulatorCoder.swift` and
+    /// `_Stubs/ULIDFactoryStub.swift`; delete this method, its call site
+    /// above, and both stub files when Pod C lands.
+    static func registerStubCoders() async {
+        await InstrumentCSVCoderRegistry.shared.register(
+            kindID: StubRunningAccumulatorCoder.kindID,
+            coder: StubRunningAccumulatorCoder.make()
+        )
     }
 }

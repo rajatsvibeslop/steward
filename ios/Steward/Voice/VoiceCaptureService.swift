@@ -160,38 +160,24 @@ actor VoiceCaptureService {
         case denied
     }
 
+    /// Deployment target is iOS 18.4 (set by Pod A), so `AVAudioApplication`
+    /// (iOS 17+) is always available — no `#available` fallback.
     nonisolated func currentMicPermission() -> MicPermission {
-        if #available(iOS 17.0, *) {
-            switch AVAudioApplication.shared.recordPermission {
-            case .undetermined: return .undetermined
-            case .denied: return .denied
-            case .granted: return .granted
-            @unknown default: return .undetermined
-            }
-        } else {
-            switch AVAudioSession.sharedInstance().recordPermission {
-            case .undetermined: return .undetermined
-            case .denied: return .denied
-            case .granted: return .granted
-            @unknown default: return .undetermined
-            }
+        switch AVAudioApplication.shared.recordPermission {
+        case .undetermined: return .undetermined
+        case .denied: return .denied
+        case .granted: return .granted
+        @unknown default: return .undetermined
         }
     }
 
     /// Trigger the system mic permission prompt. Returns the final permission
     /// state. After granting, callers should call `initializeIfNeeded()`.
     func requestMicPermission() async -> MicPermission {
-        if #available(iOS 17.0, *) {
-            let granted: Bool = await withCheckedContinuation { cont in
-                AVAudioApplication.requestRecordPermission { ok in cont.resume(returning: ok) }
-            }
-            return granted ? .granted : .denied
-        } else {
-            let granted: Bool = await withCheckedContinuation { cont in
-                AVAudioSession.sharedInstance().requestRecordPermission { ok in cont.resume(returning: ok) }
-            }
-            return granted ? .granted : .denied
+        let granted: Bool = await withCheckedContinuation { cont in
+            AVAudioApplication.requestRecordPermission { ok in cont.resume(returning: ok) }
         }
+        return granted ? .granted : .denied
     }
 
     // MARK: - Recording

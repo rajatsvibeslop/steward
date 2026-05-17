@@ -132,11 +132,16 @@ enum Checklist: InstrumentKind {
         guard let raw = correction.newValue?.lowercased() else {
             throw InstrumentKindError.unparseableCSV(reason: "Checklist correction missing newValue")
         }
+        // Open-set String input → if/else chain (no exhaustive enum covers
+        // CSV-friendly spellings). Keeps arch's "no switch-with-default".
+        let truthy: Set<String> = ["true", "1", "yes", "y", "✓"]
+        let falsy:  Set<String> = ["false", "0", "no", "n", ""]
         let shouldCheck: Bool
-        switch raw {
-        case "true", "1", "yes", "y", "✓":  shouldCheck = true
-        case "false", "0", "no", "n", "":   shouldCheck = false
-        default:
+        if truthy.contains(raw) {
+            shouldCheck = true
+        } else if falsy.contains(raw) {
+            shouldCheck = false
+        } else {
             throw InstrumentKindError.unparseableCSV(
                 reason: "Checklist correction newValue must be boolean-like, got '\(raw)'"
             )
@@ -189,10 +194,12 @@ enum Checklist: InstrumentKind {
         let cal = Calendar(identifier: .gregorian)
         let weekday = cal.component(.weekday, from: day) // 1=Sun..7=Sat
         let isWeekend = (weekday == 1 || weekday == 7)
-        switch (item.recurrence ?? "daily").lowercased() {
-        case "weekday": return !isWeekend
-        case "weekend": return isWeekend
-        default:        return true  // daily / unknown → required every day
-        }
+        // Open-set String input from definition JSON. Treat anything not
+        // "weekday"/"weekend" as daily (per spec §6). if/else chain keeps
+        // arch's "no switch-with-default" rule clean.
+        let rec = (item.recurrence ?? "daily").lowercased()
+        if rec == "weekday" { return !isWeekend }
+        if rec == "weekend" { return isWeekend }
+        return true
     }
 }

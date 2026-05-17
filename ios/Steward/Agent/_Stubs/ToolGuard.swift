@@ -1,6 +1,10 @@
 //
-//  ToolGuard.swift
-//  Steward
+//  ToolGuard.swift  (Track C stub — Agent/_Stubs/)
+//
+//  DELETE AT MERGE — Pod B owns canonical per addendum §1.8.
+//  Surface (ToolGuard.validate, ToolGuardError) must match Pod B's
+//  `Agent/ToolGuard.swift`. At merge: Pod B's file wins; this stub is
+//  deleted in the merge commit.
 //
 //  Validates / rewrites tool args before dispatch. Returns the (possibly
 //  rewritten) args JSON so the tool implementation always sees a canonical

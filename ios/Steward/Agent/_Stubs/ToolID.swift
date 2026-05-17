@@ -1,6 +1,10 @@
 //
-//  ToolId.swift
-//  Steward
+//  ToolId.swift  (Track C stub — Agent/_Stubs/)
+//
+//  DELETE AT MERGE — Pod B owns canonical per addendum §1.8.
+//  Cases must match Pod B's `Agent/ToolID.swift` exactly. Adding a new
+//  tool = add a case here AND in Pod B's canonical file. At merge: Pod
+//  B's file wins; this stub is deleted in the merge commit.
 //
 //  Addendum §1.8: typed identifier for every tool the agent can call. The
 //  enum is the only place tool Ids are spelled out; the catalog's `register`

@@ -251,22 +251,22 @@ struct EventRecentSummaryTool: LLMTool {
 // MARK: - Shared helpers
 
 enum EventTools {
-    /// Parse the `actor` wire string into an `EventActor`. Tool inputs use
-    /// the same wire format as the events table.
+    /// Parse the `actor` wire string into an `EventActor`. String input is
+    /// necessarily open-set (the `agent:<domain>` prefix admits any domain
+    /// name the user has spawned), so this is an if/else chain rather than
+    /// a switch — preserves arch's "no default in any switch" rule by simply
+    /// not using a switch.
     static func parseActor(_ wire: String) throws -> EventActor {
-        switch wire {
-        case "user":        return .user
-        case "system":      return .system
-        case "coordinator": return .coordinator
-        default:
-            if wire.hasPrefix("agent:") {
-                let dom = String(wire.dropFirst("agent:".count))
-                return .agent(domain: dom)
-            }
-            throw LLMToolError(
-                code: "invalid_actor",
-                message: "actor must be one of 'user' | 'system' | 'coordinator' | 'agent:<domain>'; got '\(wire)'"
-            )
+        if wire == "user"        { return .user }
+        if wire == "system"      { return .system }
+        if wire == "coordinator" { return .coordinator }
+        if wire.hasPrefix("agent:") {
+            let dom = String(wire.dropFirst("agent:".count))
+            return .agent(domain: dom)
         }
+        throw LLMToolError(
+            code: "invalid_actor",
+            message: "actor must be one of 'user' | 'system' | 'coordinator' | 'agent:<domain>'; got '\(wire)'"
+        )
     }
 }

@@ -1,6 +1,11 @@
 //
-//  LLMTool.swift
-//  Steward
+//  LLMTool.swift  (Track C stub — Agent/_Stubs/)
+//
+//  DELETE AT MERGE — Pod B owns canonical per addendum §1.10.
+//  Surface must match Pod B's `Agent/LLMTool.swift` exactly:
+//    `id`, `description`, `jsonSchemaForArgs`, `invoke(argsJSON:) async throws -> String`.
+//  At merge, Pod B's file wins; this stub is deleted; tool catalog
+//  compiles unchanged because the surface matches.
 //
 //  Provider-agnostic tool protocol per addendum §1.10. Tools register a JSON
 //  schema for their args and an `invoke(argsJSON:) -> String` that does the

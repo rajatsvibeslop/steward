@@ -1,6 +1,10 @@
 //
-//  ToolScope.swift
-//  Steward
+//  ToolScope.swift  (Track C stub — Agent/_Stubs/)
+//
+//  DELETE AT MERGE — Pod B owns canonical per addendum §1.8.
+//  Surface (ToolScope + ArgConstraints + AnyCodable) must match Pod B's
+//  `Agent/ToolScope.swift` exactly. At merge: Pod B's file wins; this
+//  stub is deleted.
 //
 //  Addendum §1.8: typed tool-scope. The coordinator gets every tool with no
 //  constraints; a domain agent gets a subset with `fixedArgs` forcing
@@ -88,6 +92,9 @@ struct ToolScope: Codable, Equatable, Sendable {
         return ToolScope(allowedTools: allowed, argConstraints: constraints)
     }
 
+    /// Per-tool flag: does the args object have a `domain` field? Exhaustive
+    /// switch — adding a new ToolId case = compile error here until the
+    /// flag is filled in. (Arch's strict-switch rule, broadening §4 #4.)
     private static func toolTakesDomainArg(_ id: ToolId) -> Bool {
         switch id {
         case .eventCapture, .eventList, .eventRecentSummary,
@@ -95,7 +102,12 @@ struct ToolScope: Codable, Equatable, Sendable {
              .commitmentCreate, .commitmentList,
              .memorySave, .memorySearch, .memoryListRecent:
             return true
-        default:
+        case .instrumentRead, .instrumentApplyEvent, .instrumentUpdateDefinition, .instrumentArchive,
+             .commitmentComplete, .commitmentAbandon, .commitmentSnooze,
+             .memoryForget, .memoryStrengthen,
+             .domainCreate, .domainList, .domainUpdatePrompt, .domainArchive,
+             .agentHandoff, .agentCrossConsult,
+             .mercyModeEngage, .pauseEngage, .quietHoursSet:
             return false
         }
     }

@@ -119,7 +119,7 @@ struct PermissionPromptBubble: View {
                 kind: .eventKitRemindersFull,
                 pendingToolID: "reminder.create",
                 pendingArgsJSON: "{}",
-                state: .resolved(text: "Permission denied — Steward will work around this.")
+                state: .resolved(text: "Permission denied — Outkeep will work around this.")
             ),
             onAllow: {},
             onDeny: {}

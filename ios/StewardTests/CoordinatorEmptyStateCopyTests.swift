@@ -16,7 +16,7 @@ final class CoordinatorEmptyStateCopyTests: XCTestCase {
 
     func test_greeting_morningHour() {
         let g = CoordinatorEmptyStateCopy.greeting(forLocalHour: 7)
-        XCTAssertTrue(g.hasPrefix("Morning. I'm Steward."))
+        XCTAssertTrue(g.hasPrefix("Morning. I'm Outkeep."))
         XCTAssertTrue(g.contains("Tell me something I should catch"))
         XCTAssertTrue(g.contains("walk me through it"))
     }
@@ -30,9 +30,9 @@ final class CoordinatorEmptyStateCopyTests: XCTestCase {
     }
 
     func test_greeting_smallHours_dropsSalutation() {
-        // §1.1 — between 00:00 and 04:00 lead with "I'm Steward."
+        // §1.1 — between 00:00 and 04:00 lead with "I'm Outkeep."
         let g = CoordinatorEmptyStateCopy.greeting(forLocalHour: 2)
-        XCTAssertTrue(g.hasPrefix("I'm Steward."))
+        XCTAssertTrue(g.hasPrefix("I'm Outkeep."))
         XCTAssertFalse(g.contains("Morning."))
         XCTAssertFalse(g.contains("Evening."))
     }

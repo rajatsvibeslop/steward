@@ -182,7 +182,7 @@ final class AuditLogViewModel: ObservableObject {
     }
 
     private func prettyActor(_ raw: String) -> String {
-        if raw == "coordinator" { return "Steward" }
+        if raw == "coordinator" { return "Outkeep" }
         if raw.hasPrefix("agent:") {
             return String(raw.dropFirst("agent:".count)).capitalized + " team"
         }
@@ -266,7 +266,7 @@ struct AuditLogView: View {
         List {
             if viewModel.entries.isEmpty {
                 Section {
-                    Text("Nothing here yet. Steward's actions will show up here as they happen.")
+                    Text("Nothing here yet. Outkeep's actions will show up here as they happen.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                 }
@@ -291,7 +291,7 @@ struct AuditLogView: View {
         .task { await viewModel.load() }
         .refreshable { await viewModel.load() }
         .confirmationDialog(
-            "Undo this action? Steward will roll it back.",
+            "Undo this action? Outkeep will roll it back.",
             isPresented: Binding(
                 get: { viewModel.pendingUndo != nil },
                 set: { if !$0 { viewModel.pendingUndo = nil } }

@@ -106,9 +106,9 @@ extension CalendarToolResult {
         let hint: String
         switch scope {
         case .calendarFullAccess, .calendarWriteOnly:
-            hint = "Calendar access is off. Open Settings → Privacy → Calendars → Steward to grant access."
+            hint = "Calendar access is off. Open Settings → Privacy → Calendars → Outkeep to grant access."
         case .remindersFullAccess, .remindersWriteOnly:
-            hint = "Reminders access is off. Open Settings → Privacy → Reminders → Steward to grant access."
+            hint = "Reminders access is off. Open Settings → Privacy → Reminders → Outkeep to grant access."
         }
         return .permissionDenied(scope: scope, hint: hint)
     }

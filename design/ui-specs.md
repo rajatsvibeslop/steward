@@ -28,7 +28,7 @@
 
 ```
 ┌─────────────────────────────────────────┐
-│  Steward                          ⓘ      │  ← nav bar; ⓘ → bottom sheet "What is this?"
+│  Outkeep                          ⓘ      │  ← nav bar; ⓘ → bottom sheet "What is this?"
 ├─────────────────────────────────────────┤
 │                                         │
 │  [coordinator bubble]                   │
@@ -37,7 +37,7 @@
 │                                         │
 │  [coordinator bubble]                   │
 │  ┌───────────────────────────────────┐  │
-│  │ ▸ Steward did 2 things            │  │  ← collapsed tool-call card
+│  │ ▸ Outkeep did 2 things            │  │  ← collapsed tool-call card
 │  └───────────────────────────────────┘  │
 │                                         │
 │  [domain agent bubble — Health team]    │
@@ -52,7 +52,7 @@
 
 - ScrollView (reversed scroll behavior: latest message anchored to bottom; new messages animate in from below).
 - Auto-scroll to bottom on new message; suppress auto-scroll if user has scrolled up >100pt (offer a small "Jump to latest" pill bottom-right).
-- Pull-to-refresh: regenerates last assistant turn (calls `runTurn` with the prior user message). Confirmation alert: **"Re-run last turn? Steward will re-do the work."** Buttons: **Re-run** / **Cancel**.
+- Pull-to-refresh: regenerates last assistant turn (calls `runTurn` with the prior user message). Confirmation alert: **"Re-run last turn? Outkeep will re-do the work."** Buttons: **Re-run** / **Cancel**.
 
 ### 1.2 Message bubble styles
 
@@ -61,7 +61,7 @@ Three distinct speakers must be visually unambiguous at a glance:
 | Speaker | Alignment | Background | Foreground | Avatar / label |
 |---|---|---|---|---|
 | User | trailing | `.accentColor` (system blue) | `.white` | none |
-| Coordinator | leading | `.secondarySystemBackground` | `.label` | SF Symbol `sparkle` in a circle, label **"Steward"** above bubble (only on first bubble in a run) |
+| Coordinator | leading | `.secondarySystemBackground` | `.label` | SF Symbol `sparkle` in a circle, label **"Outkeep"** above bubble (only on first bubble in a run) |
 | Domain agent | leading | `.tertiarySystemBackground` with a 2pt leading accent stripe in domain color | `.label` | SF Symbol `person.crop.circle` in domain color + label **"{Domain.display_name} team"** above bubble |
 | System / error | center | clear; italic `.secondaryLabel` | `.secondaryLabel` | none |
 
@@ -73,7 +73,7 @@ Three distinct speakers must be visually unambiguous at a glance:
 
 **Typography:**
 - Body: `.body` (17pt, dynamic).
-- "Steward" / "Health team" speaker label: `.caption` (12pt), `.secondaryLabel`, 4pt below the bubble row above.
+- "Outkeep" / "Health team" speaker label: `.caption` (12pt), `.secondaryLabel`, 4pt below the bubble row above.
 - Timestamps: NOT shown inline. Long-press a bubble → context menu with timestamp + Copy + Re-run from here.
 
 **Long-press context menu (per bubble):**
@@ -97,7 +97,7 @@ Tool calls appear **inline** within the assistant's bubble run, NOT inside the b
 - Height: 36pt single row.
 - Disclosure chevron `chevron.right` (rotates to down on expand).
 - Format: `▸ {actor_short} · {verb} {object}`
-  - `actor_short`: "Steward" for coordinator, "{Domain} team" for domain agents
+  - `actor_short`: "Outkeep" for coordinator, "{Domain} team" for domain agents
   - `verb`/`object` derived deterministically from tool name (table below)
 - Tap anywhere on row → expand inline (animated, 0.2s ease).
 - Background `.tertiarySystemBackground`, corner radius 10, 10pt horizontal padding.
@@ -124,7 +124,7 @@ Tool calls appear **inline** within the assistant's bubble run, NOT inside the b
 - **What:** tool name + key args, monospaced (`.system(.footnote, design: .monospaced)`).
 - **Why:** `reasoning` field from the event row, plain prose, `.footnote`, `.secondaryLabel`.
 - **Result:** human-readable outcome string returned by the tool dispatcher (max 2 lines, truncate with "…").
-- **Undo button:** visible only if the tool is reversible (calendar.write, calendar.delete, reminder.create, notification.schedule, instrument.apply_event, instrument.create, commitment.create, memory.save). Confirm before destructive undo: **"Undo this? Steward will roll it back."** Buttons: **Undo** / **Cancel**.
+- **Undo button:** visible only if the tool is reversible (calendar.write, calendar.delete, reminder.create, notification.schedule, instrument.apply_event, instrument.create, commitment.create, memory.save). Confirm before destructive undo: **"Undo this? Outkeep will roll it back."** Buttons: **Undo** / **Cancel**.
 - **Show in Today** button: visible only for instrument/commitment-related tools; deep-links to the relevant card in Today tab.
 
 **Verb/object table for collapsed labels** (implementer reference — extend deterministically):
@@ -177,7 +177,7 @@ When the domain agent is mid-tool-loop (between hops):
 - 12pt `.caption`, italic, `.secondaryLabel`.
 
 When the **coordinator** is processing (no handoff yet):
-- Same shimmer dots in a coordinator-styled placeholder bubble. Label above: **"Steward"**. Body: just `⋯`.
+- Same shimmer dots in a coordinator-styled placeholder bubble. Label above: **"Outkeep"**. Body: just `⋯`.
 
 If a turn exceeds 20s without producing a response, append a faint inline note (system style, center):
 - **"Still working. Foundation Models can be slow on first cold start."**
@@ -204,7 +204,7 @@ If `MAX_HOPS` is hit (loop fallback from §7):
 - Right-edge button changes based on input field state:
   - **Empty field:** mic icon `mic.fill`, system blue. Hold-to-talk (see voice spec 1.6).
   - **Non-empty field:** arrow up `arrow.up.circle.fill`, system blue. Tap to send.
-- Disabled (greyed) when a turn is in-flight; placeholder swaps to **"Steward is working…"** and field becomes read-only until the turn returns.
+- Disabled (greyed) when a turn is in-flight; placeholder swaps to **"Outkeep is working…"** and field becomes read-only until the turn returns.
 
 ### 1.6 Voice input (hold-to-talk)
 
@@ -218,7 +218,7 @@ Cancel-while-recording: if the user slides their finger off the button while sti
 
 Error states:
 - WhisperKit unavailable / fails to load: mic button greyed permanently. Tap shows toast: **"Voice isn't ready right now. You can still type."** No retry button — user can re-toggle voice in Settings.
-- Permission denied (microphone): tapping mic shows alert **"Steward needs microphone access for voice input."** Buttons: **Open Settings** / **Not now**.
+- Permission denied (microphone): tapping mic shows alert **"Outkeep needs microphone access for voice input."** Buttons: **Open Settings** / **Not now**.
 
 ### 1.7 Empty / first-run state
 
@@ -226,13 +226,13 @@ First-launch Chat tab (no `events` rows in DB):
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Steward                          ⓘ          │
+│  Outkeep                          ⓘ          │
 ├─────────────────────────────────────────────┤
 │                                              │
 │                                              │
-│         (Steward avatar, sparkle SF)        │
+│         (Outkeep avatar, sparkle SF)        │
 │                                              │
-│         Morning. I'm Steward.               │
+│         Morning. I'm Outkeep.               │
 │                                              │
 │         Tell me something I should           │
 │         catch — sleep, money, the            │
@@ -249,9 +249,9 @@ First-launch Chat tab (no `events` rows in DB):
 
 - Greeting body is `.body`, centered, max-width 280pt, `.label`.
 - Avatar is 56pt `sparkle` SF Symbol in `.accentColor`.
-- **Time-of-day variant** (deterministic in Swift, not LLM): swap "Morning" → "Afternoon" / "Evening" based on local hour. Hours ≥04:00 & <12:00 → "Morning"; ≥12:00 & <17:00 → "Afternoon"; otherwise → "Evening". Between 00:00 and 04:00 local, drop the greeting word entirely and lead with **"I'm Steward."**
+- **Time-of-day variant** (deterministic in Swift, not LLM): swap "Morning" → "Afternoon" / "Evening" based on local hour. Hours ≥04:00 & <12:00 → "Morning"; ≥12:00 & <17:00 → "Afternoon"; otherwise → "Evening". Between 00:00 and 04:00 local, drop the greeting word entirely and lead with **"I'm Outkeep."**
 - **Suggestion chips** (rendered just below the input bar while the greeting is showing): two tappable chips — **Catch something** and **Walk me through it**. Tapping **Walk me through it** fills the input with literal text `walk me through it` (does NOT auto-send). Tapping **Catch something** focuses the input and swaps the placeholder to **"What should I catch? (sleep, weight, a spend, a thing on your mind…)"** without inserting any text. Chips dismiss once the user sends their first message.
-- After the first user message, this greeting (and the chips) disappear (one-shot UI; the user's first message and Steward's reply DO get persisted to events as normal turns).
+- After the first user message, this greeting (and the chips) disappear (one-shot UI; the user's first message and Outkeep's reply DO get persisted to events as normal turns).
 - **Critical:** the greeting block above is rendered by the UI, not by the LLM. The first LLM turn happens when the user sends their first message. The coordinator's empty-state behavior is governed by `design/coordinator-empty-state-v2.md` (canonical) starting from the user's first message.
 
 ### 1.8 Offline indicator
@@ -266,14 +266,14 @@ When `NWPathMonitor` reports no network:
   ```
   Foundation Models isn't available.
 
-  Steward runs on Apple's on-device model.
-  To use Steward, enable Apple Intelligence
+  Outkeep runs on Apple's on-device model.
+  To use Outkeep, enable Apple Intelligence
   in Settings → Apple Intelligence & Siri.
 
   [ Open Settings ]   [ Try again ]
   ```
-- Tool call failed (transient): the tool-call card renders in expanded state with a red accent stripe and a "Result" section reading: **"This didn't go through: {error_message}. Steward kept going."** plus a **Retry** button when retry is safe.
-- Turn timed out (>60s wall clock): inline system message **"Steward took too long. Saved your message — tap to retry."** Tapping retries with the same input.
+- Tool call failed (transient): the tool-call card renders in expanded state with a red accent stripe and a "Result" section reading: **"This didn't go through: {error_message}. Outkeep kept going."** plus a **Retry** button when retry is safe.
+- Turn timed out (>60s wall clock): inline system message **"Outkeep took too long. Saved your message — tap to retry."** Tapping retries with the same input.
 
 ---
 
@@ -371,7 +371,7 @@ When `NWPathMonitor` reports no network:
 - Improvement vs target: `.label` (no color), prepend SF `arrow.up.right` in `.secondaryLabel`.
 - Worse vs target: `.label`, prepend SF `arrow.down.right` in `.secondaryLabel`.
 - Within ±5%: just `.secondaryLabel`, prepend SF `arrow.right`.
-- **Never use** red/orange for "bad" or green for "good." Steward doesn't moralize numbers.
+- **Never use** red/orange for "bad" or green for "good." Outkeep doesn't moralize numbers.
 
 **Checklist `{streak_text}`:** intentionally not a streak. Show **"{N} checked today"** — never "X days in a row." Spec §15 bans streak language.
 
@@ -417,7 +417,7 @@ Upcoming
 │         that's the right starting point.    │
 │                                              │
 │         Head over to Chat. Tell             │
-│         Steward something to catch,         │
+│         Outkeep something to catch,         │
 │         or say "walk me through it."        │
 │         That's where the first team         │
 │         gets built.                         │
@@ -545,18 +545,18 @@ All edits write `settings_json` and emit an event `kind='settings_change'` with 
    • Cancel
   ```
 - Engaging schedules `mercy_mode.engage(until_when, "user-toggled from Settings")`.
-- When ON, row caption beneath the toggle: **"On until {when}. Steward is gentler right now."** with a **"Turn off"** affordance.
+- When ON, row caption beneath the toggle: **"On until {when}. Outkeep is gentler right now."** with a **"Turn off"** affordance.
 - Toggle OFF → no confirmation. Emits `mercy_mode.disengage` event.
 
 **Pause row:**
 
 - Same pattern. Action sheet:
   ```
-  Pause Steward
+  Pause Outkeep
 
   All proactive nudges stop.
   Your own calendar/reminder commitments
-  still fire — Steward just stays quiet.
+  still fire — Outkeep just stays quiet.
 
   For how long?
    • The rest of today
@@ -628,7 +628,7 @@ Row: **"Recent actions"** → push to `AuditLogView`.
 │  Why: You logged "weighed 178 this morning." │
 │  [ Undo ]                                    │
 │                                              │
-│  10:30 PM  Steward                           │
+│  10:30 PM  Outkeep                           │
 │  Scheduled "Wind-down nudge" for 22:30       │
 │  Why: You asked for a wind-down reminder.    │
 │  [ Undo ]                                    │
@@ -642,12 +642,12 @@ Row: **"Recent actions"** → push to `AuditLogView`.
 - Source: `events` rows where `actor` starts with `agent:` or `actor='coordinator'` AND `kind` is in the externally-mutating set (calendar_*, sheets_*, notification_*, instrument_create, instrument_apply_event, domain_create, memory_save, commitment_create, mercy_mode_engage, pause_engage, quiet_hours_set).
 - Pagination: last 50 by default; "Show 50 more" button at bottom.
 - Grouped by day (today / yesterday / earlier).
-- Each entry shows: time, actor (Steward or `{domain} team`), one-line summary, **"Why: {reasoning}"** below, **Undo** button if reversible.
+- Each entry shows: time, actor (Outkeep or `{domain} team`), one-line summary, **"Why: {reasoning}"** below, **Undo** button if reversible.
 - Undo button behavior:
-  - Confirmation alert **"Undo this action? Steward will roll it back."** Buttons: **Undo** / **Cancel**.
+  - Confirmation alert **"Undo this action? Outkeep will roll it back."** Buttons: **Undo** / **Cancel**.
   - Emits inverse event per spec §15. UI immediately marks the entry with a `.strikethrough()` + small caption **"Undone."** Undo button removed.
   - If undo itself fails: red toast **"Couldn't undo this one. {error}."**
-- Empty state: **"Nothing here yet. Steward's actions will show up here as they happen."**
+- Empty state: **"Nothing here yet. Outkeep's actions will show up here as they happen."**
 
 ### 3.6 CAPTURE
 
@@ -726,7 +726,7 @@ sending ─── network not required ──> coordinator_running
 UI mirrors:
 - `idle`: input bar enabled, no thinking indicators.
 - `sending`: user bubble appears immediately, optimistic. Send button → spinner for ~200ms.
-- `coordinator_running`: "Steward" thinking bubble.
+- `coordinator_running`: "Outkeep" thinking bubble.
 - `handoff_pending`: handoff inline indicator → domain agent thinking bubble.
 - `tool_executing`: no extra UI; tool-call cards appear after they complete.
 

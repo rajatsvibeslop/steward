@@ -27,13 +27,13 @@ This is what the user sees when they first land in Chat with `events.count == 0`
 
 ### 1.1 Greeting bubble copy (verbatim)
 
-> **Morning. I'm Steward.**
+> **Morning. I'm Outkeep.**
 >
 > **Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say "walk me through it" and I'll help you set up a first piece.**
 
 Two sentences (counting the greeting). Works for both branches. The examples are concrete enough that the user has a hook even at 7am.
 
-**Time-of-day variant.** Swap "Morning" for "Afternoon" / "Evening" based on local hour (≥04:00 & <12:00 → Morning, ≥12:00 & <17:00 → Afternoon, else Evening). If hour is between 00:00 and 04:00, drop the greeting entirely and lead with "I'm Steward."
+**Time-of-day variant.** Swap "Morning" for "Afternoon" / "Evening" based on local hour (≥04:00 & <12:00 → Morning, ≥12:00 & <17:00 → Afternoon, else Evening). If hour is between 00:00 and 04:00, drop the greeting entirely and lead with "I'm Outkeep."
 
 ### 1.2 Suggestion chips beneath the input (verbatim)
 
@@ -282,9 +282,9 @@ Track B picks which variant based on what happened in onboarding:
 
 | Onboarding outcome | Notification title | Notification body |
 |---|---|---|
-| User spawned a team | **"Steward"** | **"You set up the {Team Name} team this morning. Anything to log? Hold the mic and just talk."** |
-| User captured ≥1 event but no team | **"Steward"** | **"Anything else to catch from today? Two seconds of voice works."** |
-| User captured something AND spawned a team | **"Steward"** | **"How's {Team Name} feeling? Anything to log — or nothing's fine too."** |
+| User spawned a team | **"Outkeep"** | **"You set up the {Team Name} team this morning. Anything to log? Hold the mic and just talk."** |
+| User captured ≥1 event but no team | **"Outkeep"** | **"Anything else to catch from today? Two seconds of voice works."** |
+| User captured something AND spawned a team | **"Outkeep"** | **"How's {Team Name} feeling? Anything to log — or nothing's fine too."** |
 
 **Tap action:** opens app to Chat tab with input focused and mic primed (no auto-message sent; user types or talks).
 
@@ -357,7 +357,7 @@ The designer's `ui-specs.md` was written before this v2 script. The following li
 | L203 | `"Say hi, or tell me what's been hard to keep up with."` (input placeholder, empty state) | `"Type, or hold the mic to talk."` |
 | L235–245 | Greeting body including "they don't decay when life shifts" and "When you're ready, tell me what's been hardest to keep up with lately." | Replace with the §1.1 verbatim greeting from this file (two short sentences, no "decay" or "hardest to keep up with" language). |
 | L242 | `"No quiz, no setup forms."` | Drop. Surfacing the scaffolding ("no quiz") still makes "quiz" present in the mind. Just don't be a quiz. |
-| L420–424 | Today-empty body: "Head over to Chat and tell Steward what's been hardest to keep up with lately. That's where the first team gets built." | Replace with: **"Head over to Chat. Tell Steward something to catch, or say 'walk me through it.' That's where the first team gets built."** |
+| L420–424 | Today-empty body: "Head over to Chat and tell Outkeep what's been hardest to keep up with lately. That's where the first team gets built." | Replace with: **"Head over to Chat. Tell Outkeep something to catch, or say 'walk me through it.' That's where the first team gets built."** |
 | L437 | Voice rationale: "What's been hardest to keep up with" mirrors spec §16's empty-state question — same words across surfaces. | This rationale is now obsolete. The mirror string across surfaces should be the §1.1 greeting from v2: "Tell me something to catch — or say 'walk me through it'." |
 | L614 | Settings "+ Add a team via chat" injected message: "Tell me about the new team — what's the part of your life that's been hardest to keep up with? Name and role are up to you; I'll propose a starting shape." | Replace with: **"Want to add a new team — what would you like me to help carry? Name and tone are up to you; I'll propose a starting shape."** |
 

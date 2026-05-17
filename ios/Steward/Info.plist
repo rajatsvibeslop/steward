@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Steward</string>
+	<string>Outkeep</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -24,6 +24,17 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+
+	<!-- Outkeep brand typography. Satoshi (display) bundled in Resources/Fonts/.
+	     SF Pro is the system body face and does not need to be registered. -->
+	<key>UIAppFonts</key>
+	<array>
+		<string>Satoshi-Light.otf</string>
+		<string>Satoshi-Regular.otf</string>
+		<string>Satoshi-Medium.otf</string>
+		<string>Satoshi-Bold.otf</string>
+		<string>Satoshi-Black.otf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -45,22 +56,22 @@
 
 	<!-- EventKit (iOS 17+ new permission model; iOS 26 enforces .fullAccess) -->
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Steward helps you manage time-based commitments and brief you on what's coming up.</string>
+	<string>Outkeep helps you manage time-based commitments and brief you on what's coming up.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Steward turns chat-spoken commitments into Reminders that show up on your lock screen.</string>
+	<string>Outkeep turns chat-spoken commitments into Reminders that show up on your lock screen.</string>
 
 	<!-- HealthKit (v1.1 — read-only spike for sleep, body mass, step count).
 	     Read key only; the gateway never calls `requestAuthorization` with a
 	     non-empty `toShare:` set, so the OS never asks for write permission
 	     and the Update usage key would be unused / misleading at review. -->
 	<key>NSHealthShareUsageDescription</key>
-	<string>Steward reads your sleep, weight, and step count from Apple Health so your Health domain doesn't need manual logging.</string>
+	<string>Outkeep reads your sleep, weight, and step count from Apple Health so your Health domain doesn't need manual logging.</string>
 
 	<!-- Voice capture -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Steward lets you log events by voice instead of typing.</string>
+	<string>Outkeep lets you log events by voice instead of typing.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Steward uses on-device speech recognition to turn what you say into log entries.</string>
+	<string>Outkeep uses on-device speech recognition to turn what you say into log entries.</string>
 
 	<!-- iCloud Drive document scope. CSV mirror lives under iCloud Drive / Steward / -->
 	<key>NSUbiquitousContainerIsDocumentScopePublic</key>

@@ -155,7 +155,7 @@ enum ToolCallSummaryBuilder {
             if let until = args["until_when"] ?? args["until"] {
                 return ("paused", "until \(until)")
             }
-            return ("paused", "Steward")
+            return ("paused", "Outkeep")
         case .quietHoursSet:
             let start = args["start"] ?? "?"
             let end = args["end"] ?? "?"

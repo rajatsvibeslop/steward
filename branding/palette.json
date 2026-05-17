@@ -1,0 +1,14 @@
+{
+  "origin_bark": "#5C4627",
+  "ulsan_gold": "#B4996C",
+  "signal_flame": "#DC6E1F",
+  "porcelain": "#FAFAFA",
+  "deep_black": "#0A0A0A",
+  "_notes": {
+    "origin_bark": "Dark warm brown sampled from dark-mode marketing render glyph shadows (mean of dark gold-bark pixels, R>G>B, R<120, G<90, B<60).",
+    "ulsan_gold": "Warm gold sampled as mean of gold pixels (R>G>B, sufficient saturation) from both marketing renders. R=180,G=153,B=108. Brief target R≈170-200,G≈140-170,B<100; B at 108 is 8 over the brief ceiling — accepted because the sample matches the visual gold of the lighthouse glyph; slightly muted from a brighter highlight gold (#E7CF9E) seen on letterforms.",
+    "signal_flame": "Constructed to brief spec (R≈220,G≈100-130,B<50). Not present in the icon glyph or in the brand sheet's swatches — Gemini brand sheet had unrelated AI-noise palette ('Beacon Mint #70BB81' etc.) that contradicted the canonical brief. Picking R=220,G=110,B=31 as a vivid warm orange consistent with 'Signal Flame' brand voice (alert/accent only).",
+    "porcelain": "Near-white cream. Brand sheet printed #FAFAFA next to the 'Porcelain' label (the one printed-hex value on the sheet that survived the AI-noise audit). Brief says 'near-white warm'; #FAFAFA is neutral but visually reads as porcelain at scale. Holding here pending designer review.",
+    "deep_black": "Sampled #101010 from dark-mode icon tile fill (top dominant bin, 35%); softened to #0A0A0A to stay within brief ceiling of (20,20,20) and to leave room for the dark icon tile to read as black-on-darker rather than black-on-black."
+  }
+}

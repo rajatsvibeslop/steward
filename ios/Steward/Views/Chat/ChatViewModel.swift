@@ -159,7 +159,7 @@ final class ChatViewModel: ObservableObject {
             handleHealthKitPermissionRequired(signal: signal)
         } catch {
             removeMessage(id: thinkingID)
-            let errorText = "Steward took too long. Saved your message — tap to retry."
+            let errorText = "Outkeep took too long. Saved your message — tap to retry."
             appendMessage(ChatMessage(
                 id: UUID().uuidString,
                 timestamp: clock(),
@@ -301,7 +301,7 @@ final class ChatViewModel: ObservableObject {
     private func resolvePromptDenied(at promptID: String, model: PermissionPromptModel) {
         updatePrompt(
             id: promptID,
-            state: .resolved(text: "Not allowed — Steward will work around this.")
+            state: .resolved(text: "Not allowed — Outkeep will work around this.")
         )
     }
 
@@ -371,7 +371,7 @@ final class ChatViewModel: ObservableObject {
                 id: UUID().uuidString,
                 timestamp: clock(),
                 body: .systemNote(text:
-                    "Steward couldn't read that notification cleanly (\(reason))."
+                    "Outkeep couldn't read that notification cleanly (\(reason))."
                 )
             ))
         }
@@ -416,7 +416,7 @@ final class ChatViewModel: ObservableObject {
         for inv in response.toolInvocations {
             let summary = ToolCallSummaryBuilder.build(
                 invocation: inv,
-                defaultActorLabel: "Steward",
+                defaultActorLabel: "Outkeep",
                 defaultDomainKey: nil,
                 eventID: extractEventID(inv.resultJSON)
             )

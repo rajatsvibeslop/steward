@@ -94,7 +94,7 @@ final class FollowupSchedulerTests: XCTestCase {
             mode: .normal,
             context: context
         )
-        XCTAssertEqual(r.title, "Steward")
+        XCTAssertEqual(r.title, "Outkeep")
         XCTAssertTrue(r.body.contains("You set up the Health team this morning"))
         XCTAssertTrue(r.body.contains("Hold the mic"))
     }

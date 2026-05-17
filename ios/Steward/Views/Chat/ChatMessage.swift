@@ -79,11 +79,11 @@ struct PermissionPromptModel: Equatable {
     var body: String {
         switch kind {
         case .eventKitCalendarFull, .eventKitCalendarWrite:
-            return "Steward wants to read your calendar to help with scheduling. Allow?"
+            return "Outkeep wants to read your calendar to help with scheduling. Allow?"
         case .eventKitRemindersFull, .eventKitRemindersWrite:
-            return "Steward wants to add reminders for the things you commit to. Allow?"
+            return "Outkeep wants to add reminders for the things you commit to. Allow?"
         case .healthKitReadAll:
-            return "Steward wants to read your sleep, weight, and step count from Apple Health. Allow?"
+            return "Outkeep wants to read your sleep, weight, and step count from Apple Health. Allow?"
         }
     }
 }

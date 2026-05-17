@@ -66,7 +66,7 @@ enum CSVMirrorAvailability: Sendable, Equatable {
     /// they have iCloud sync but doesn't. Nil for the other two states.
     var fallbackBannerCopy: String? {
         guard requiresFallbackBanner else { return nil }
-        return "iCloud Drive is off — Steward is saving locally only."
+        return "iCloud Drive is off — Outkeep is saving locally only."
     }
 }
 

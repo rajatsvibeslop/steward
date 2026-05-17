@@ -21,7 +21,7 @@ struct TodayEmptyState: View {
                 .font(.title3)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
-            Text("Head over to Chat. Tell Steward something to catch, or say \"walk me through it.\" That's where the first team gets built.")
+            Text("Head over to Chat. Tell Outkeep something to catch, or say \"walk me through it.\" That's where the first team gets built.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

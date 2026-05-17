@@ -33,13 +33,13 @@ struct ModesSection: View {
             Text("Softer nudges, fewer of them.\nNo reviewing gaps.\n\nFor how long?")
         }
         .confirmationDialog(
-            "Pause Steward",
+            "Pause Outkeep",
             isPresented: $pickingPause,
             titleVisibility: .visible
         ) {
             modeButtons(forMercy: false)
         } message: {
-            Text("All proactive nudges stop.\nYour own calendar/reminder commitments still fire — Steward just stays quiet.\n\nFor how long?")
+            Text("All proactive nudges stop.\nYour own calendar/reminder commitments still fire — Outkeep just stays quiet.\n\nFor how long?")
         }
     }
 
@@ -131,7 +131,7 @@ struct ModesSection: View {
         formatter.timeStyle = .short
         let when = formatter.string(from: until)
         if mercy {
-            return "On until \(when). Steward is gentler right now."
+            return "On until \(when). Outkeep is gentler right now."
         }
         return "Paused until \(when). Calendar and your own reminders still fire."
     }

@@ -32,7 +32,7 @@ struct ChatInputBar: View {
     private var sendVisible: Bool { !trimmedText.isEmpty }
 
     private var displayPlaceholder: String {
-        isSending ? "Steward is working…" : placeholder
+        isSending ? "Outkeep is working…" : placeholder
     }
 
     var body: some View {

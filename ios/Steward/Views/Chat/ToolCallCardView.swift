@@ -81,7 +81,7 @@ struct ToolCallCardView: View {
                             .buttonStyle(.bordered)
                             .disabled(undoInFlight || undoStatus != nil)
                             .confirmationDialog(
-                                "Undo this? Steward will roll it back.",
+                                "Undo this? Outkeep will roll it back.",
                                 isPresented: $confirmingUndo,
                                 titleVisibility: .visible
                             ) {

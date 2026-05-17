@@ -104,7 +104,7 @@ enum HealthToolResult: Sendable {
 
 extension HealthToolResult {
     static func denied(_ scope: HealthPermissionScope) -> HealthToolResult {
-        let hint = "Health access is off. Open Settings → Privacy → Health → Steward to grant access."
+        let hint = "Health access is off. Open Settings → Privacy → Health → Outkeep to grant access."
         return .permissionDenied(scope: scope, hint: hint)
     }
 }

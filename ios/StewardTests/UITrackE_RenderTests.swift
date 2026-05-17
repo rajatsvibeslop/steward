@@ -112,7 +112,7 @@ final class UITrackE_RenderTests: XCTestCase {
         )
         let summary = ToolCallSummaryBuilder.build(
             invocation: inv,
-            defaultActorLabel: "Steward",
+            defaultActorLabel: "Outkeep",
             defaultDomainKey: nil,
             eventID: "abc"
         )
@@ -131,7 +131,7 @@ final class UITrackE_RenderTests: XCTestCase {
         )
         let summary = ToolCallSummaryBuilder.build(
             invocation: inv,
-            defaultActorLabel: "Steward",
+            defaultActorLabel: "Outkeep",
             defaultDomainKey: nil,
             eventID: nil
         )
@@ -149,7 +149,7 @@ final class UITrackE_RenderTests: XCTestCase {
         )
         let summary = ToolCallSummaryBuilder.build(
             invocation: inv,
-            defaultActorLabel: "Steward",
+            defaultActorLabel: "Outkeep",
             defaultDomainKey: nil,
             eventID: nil
         )
@@ -161,8 +161,8 @@ final class UITrackE_RenderTests: XCTestCase {
 
     func testGreetingMatchesUXRForMorningHour() {
         let copy = CoordinatorEmptyStateCopy.greeting(forLocalHour: 7)
-        XCTAssertTrue(copy.hasPrefix("Morning. I'm Steward."),
-                      "Greeting at 7am must begin with 'Morning. I'm Steward.'; got: \(copy)")
+        XCTAssertTrue(copy.hasPrefix("Morning. I'm Outkeep."),
+                      "Greeting at 7am must begin with 'Morning. I'm Outkeep.'; got: \(copy)")
         XCTAssertFalse(copy.lowercased().contains("decay"))
         XCTAssertFalse(copy.lowercased().contains("hardest to keep up"))
     }

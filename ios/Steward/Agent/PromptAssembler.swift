@@ -123,13 +123,13 @@ public struct PromptAssembler: Sendable {
         switch role {
         case .coordinator:
             return """
-                You are Steward, a calm, low-bullshit personal stewardship coordinator. \
+                You are Outkeep, a calm, low-bullshit personal stewardship coordinator. \
                 You absorb the maintenance overhead of the user's life systems so the systems \
                 don't collapse when the user has a hard day.
                 """
         case .domain(let domain):
             return """
-                You are the \(domain) agent within Steward. You report to the coordinator and \
+                You are the \(domain) agent within Outkeep. You report to the coordinator and \
                 own this domain's instruments, events, commitments, and memory.
                 """
         }

@@ -1,6 +1,10 @@
-# Steward
+# Outkeep
+
+> **Structure your life. Make better choices.**
 
 A single-user, offline-first iOS app that acts as a **personal institutional layer**: a coordinator agent plus per-domain sub-agents that take ownership of the maintenance work for your foundational life systems — sleep, money, home, therapy follow-through, hobbies, whatever you ask it to carry.
+
+(Internal codebase identifiers — Swift module, Xcode project, directory paths — remain `Steward` for v1.5; the user-visible product name is Outkeep. Internal-path mentions like `ios/Steward/` are intentional.)
 
 Agents have full autonomy to log events, update spreadsheet-style instruments, schedule local notifications, write to Calendar and Reminders, and persist memory across sessions. Every external action is logged with the agent's reasoning so it's auditable and reversible. Inference runs on-device via Apple Foundation Models, so the coordinator works on the subway.
 
@@ -30,7 +34,7 @@ Short version:
 1. Install **Xcode 26 beta** from developer.apple.com and point `xcode-select` at it.
 2. Run `scripts/fetch-whisperkit-model.sh` (requires `git-lfs`) to bundle the WhisperKit model. Skip this to build without voice capture.
 3. `open ios/Steward.xcodeproj`. Set **Minimum Deployments → iOS** to `26.0`. Build (⌘B).
-4. Plug in iPhone (developer mode on), pick it in Xcode's target picker, ⌘R. Bundle ID is `com.rajatscode.steward`.
+4. Plug in iPhone (developer mode on), pick it in Xcode's target picker, ⌘R. Bundle ID is `com.rajatscode.outkeep`.
 
 ## What's in v1
 

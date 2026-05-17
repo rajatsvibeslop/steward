@@ -41,7 +41,7 @@ final class MockLLMSessionTests: XCTestCase {
             empty_state_branch: branch_c
             """
         let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "hi")
-        XCTAssertTrue(plan.text.contains("Steward"))
+        XCTAssertTrue(plan.text.contains("Outkeep"))
         XCTAssertTrue(plan.text.contains("Tell me something I should catch"))
         XCTAssertTrue(plan.toolCalls.isEmpty)
     }
@@ -328,7 +328,7 @@ final class MockLLMSessionTests: XCTestCase {
         )
         let r1 = try await s1.respond(to: "hi")
         XCTAssertTrue(r1.toolInvocations.isEmpty)
-        XCTAssertTrue(r1.text.contains("Steward"))
+        XCTAssertTrue(r1.text.contains("Outkeep"))
 
         // Turn 3 — domain.create.
         let s3 = try await factory.makeSession(

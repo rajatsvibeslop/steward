@@ -41,7 +41,7 @@ struct ChatView: View {
                 )
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Steward")
+            .navigationTitle("Outkeep")
             .navigationBarTitleDisplayMode(.inline)
             .task {
                 await viewModel.loadInitialState()
@@ -128,7 +128,7 @@ struct ChatView: View {
         case .handoffIndicator(let key, let name):
             HandoffIndicator(domainKey: key, displayName: name)
         case .thinkingCoordinator:
-            ThinkingBubble(label: "Steward", domainKey: nil)
+            ThinkingBubble(label: "Outkeep", domainKey: nil)
         case .thinkingDomain(let key, let name):
             ThinkingBubble(label: "\(name) team is thinking", domainKey: key)
         case .systemNote(let text):

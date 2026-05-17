@@ -185,16 +185,16 @@ struct CSVMirrorPaths: Sendable {
 
 enum CSVMirrorBoilerplate {
     static let rootREADME = """
-    # Steward — iCloud Drive Mirror
+    # Outkeep — iCloud Drive Mirror
 
-    These files are an auto-maintained mirror of Steward's local database.
+    These files are an auto-maintained mirror of Outkeep's local database.
 
-    - `instruments/<domain>/<name>/data.csv` — editable; Steward picks up your changes.
+    - `instruments/<domain>/<name>/data.csv` — editable; Outkeep picks up your changes.
     - `instruments/<domain>/<name>/state.csv` — auto-generated; do NOT edit (your edits are silently ignored).
     - `events/events_YYYY-MM.csv` — append-only event log, one file per month.
 
-    Steward writes through `NSFileCoordinator`; if you edit a file in Numbers while
-    Steward is also writing, iCloud will create a conflict version and Steward will
+    Outkeep writes through `NSFileCoordinator`; if you edit a file in Numbers while
+    Outkeep is also writing, iCloud will create a conflict version and Outkeep will
     resolve it by choosing the most recent modification and flagging affected rows
     in the next sync.
     """
@@ -205,8 +205,9 @@ enum CSVMirrorBoilerplate {
     state.csv is auto-generated from the instrument's current state and will be
     overwritten on every update — your edits to state.csv are silently lost.
 
-    Reserved columns (__row_id, __steward_version, __last_synced_at) let Steward
+    Reserved columns (__row_id, __steward_version, __last_synced_at) let Outkeep
     track which row is which. Do NOT delete or reorder them; do NOT change the
-    values in those columns.
+    values in those columns. The `__steward_version` column name is preserved for
+    backward compatibility with v1.x mirrors.
     """
 }

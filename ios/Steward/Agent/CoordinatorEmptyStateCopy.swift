@@ -29,9 +29,9 @@ public enum CoordinatorEmptyStateCopy {
     /// Time-of-day variant per v2 §1.1. `hour` is 0..23 local.
     public static func greeting(forLocalHour hour: Int) -> String {
         // ≥04:00 & <12:00 → Morning; ≥12:00 & <17:00 → Afternoon; else Evening.
-        // Between 00:00 and 04:00 → drop greeting, lead with "I'm Steward."
+        // Between 00:00 and 04:00 → drop greeting, lead with "I'm Outkeep."
         if hour >= 0 && hour < 4 {
-            return "I'm Steward. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say \"walk me through it\" and I'll help you set up a first piece."
+            return "I'm Outkeep. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say \"walk me through it\" and I'll help you set up a first piece."
         }
         let salutation: String
         if hour >= 4 && hour < 12 {
@@ -41,7 +41,7 @@ public enum CoordinatorEmptyStateCopy {
         } else {
             salutation = "Evening"
         }
-        return "\(salutation). I'm Steward. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say \"walk me through it\" and I'll help you set up a first piece."
+        return "\(salutation). I'm Outkeep. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say \"walk me through it\" and I'll help you set up a first piece."
     }
 
     // MARK: - §3 Branch A — capture-first

@@ -1,4 +1,4 @@
-# First morning with Steward
+# First morning with Outkeep
 
 You have the app on your phone. Onboarding ran. You're looking at the Chat tab. This is what happens next.
 
@@ -10,7 +10,7 @@ For build/deploy steps, see `sunday-morning-startup.md`. For the design rational
 
 A single greeting bubble. The exact text depends on the local hour:
 
-> **Morning. I'm Steward. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say "walk me through it" and I'll help you set up a first piece.**
+> **Morning. I'm Outkeep. Tell me something I should catch — sleep, money, the kitchen, a thing on your mind — or say "walk me through it" and I'll help you set up a first piece.**
 
 (Substitute "Afternoon" / "Evening" for the salutation, or no salutation at all between 00:00 and 04:00.)
 

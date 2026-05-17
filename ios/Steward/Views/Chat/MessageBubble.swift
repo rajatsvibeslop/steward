@@ -40,7 +40,7 @@ struct CoordinatorBubble: View {
                 .padding(.top, 10)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("Steward")
+                    Text("Outkeep")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if showsStubChip {

@@ -123,7 +123,7 @@ enum NotificationTemplate {
             // safe fallback so we never crash mid-tap.
             return Rendered(
                 title: "Good morning",
-                body: "Steward is paused. Tap to resume when you're ready."
+                body: "Outkeep is paused. Tap to resume when you're ready."
             )
         }
     }
@@ -141,7 +141,7 @@ enum NotificationTemplate {
                 body: "Small win idea — log one thing you did today, if it feels okay."
             )
         case .pause:
-            return Rendered(title: "Wind-down", body: "Steward is paused.")
+            return Rendered(title: "Wind-down", body: "Outkeep is paused.")
         }
     }
 
@@ -159,7 +159,7 @@ enum NotificationTemplate {
                 body: "\(instrument) — only if it's easy right now."
             )
         case .pause:
-            return Rendered(title: "Check-in", body: "Steward is paused.")
+            return Rendered(title: "Check-in", body: "Outkeep is paused.")
         }
     }
 
@@ -198,7 +198,7 @@ enum NotificationTemplate {
                 body: "Small re-entry in \(domain) when it feels easy. No catch-up needed."
             )
         case .pause:
-            return Rendered(title: "Whenever you're ready", body: "Steward is paused.")
+            return Rendered(title: "Whenever you're ready", body: "Outkeep is paused.")
         }
     }
 
@@ -218,19 +218,19 @@ enum NotificationTemplate {
         if let name = context.domainDisplayName {
             if captured {
                 return Rendered(
-                    title: "Steward",
+                    title: "Outkeep",
                     body: "How's \(name) feeling? Anything to log — or nothing's fine too."
                 )
             }
             return Rendered(
-                title: "Steward",
+                title: "Outkeep",
                 body: "You set up the \(name) team this morning. Anything to log? Hold the mic and just talk."
             )
         }
         // No-domain (rare; UXR script requires at least one domain by the
         // time this fires, but handle it defensively).
         return Rendered(
-            title: "Steward",
+            title: "Outkeep",
             body: "Anything else to catch from today? Two seconds of voice works."
         )
     }

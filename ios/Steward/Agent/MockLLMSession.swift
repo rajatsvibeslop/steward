@@ -433,7 +433,7 @@ public struct MockResponsePlan: Sendable, Equatable {
         // -----------------------------------------------------------------
         if convoState == .awaitingFirstMessage || branch == .branchCUnclear {
             return MockResponsePlan(
-                text: "[MOCK] Morning. I'm Steward. " +
+                text: "[MOCK] Morning. I'm Outkeep. " +
                       "Tell me something I should catch — sleep, money, the kitchen, a thing " +
                       "on your mind — or say \"walk me through it\" and I'll help set up a first piece.",
                 toolCalls: []

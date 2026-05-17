@@ -63,7 +63,7 @@ private struct BootstrapBanner: View {
         case .opening:
             HStack(spacing: 8) {
                 ProgressView()
-                Text("Opening Steward database…")
+                Text("Opening Outkeep database…")
                     .font(.footnote)
             }
             .padding(.horizontal, 12)

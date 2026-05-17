@@ -17,7 +17,6 @@
 //
 
 import Foundation
-import UserNotifications
 
 struct RRuleSubset: Sendable, Codable, Equatable {
     enum Frequency: String, Codable, Sendable {
@@ -179,11 +178,4 @@ enum RRuleParser {
             }
     }
 
-    /// Convenience: build `UNCalendarNotificationTrigger` array. Each trigger
-    /// has `repeats: true` because every component pattern is recurring.
-    static func triggers(for rule: RRuleSubset) -> [UNCalendarNotificationTrigger] {
-        dateComponents(for: rule).map {
-            UNCalendarNotificationTrigger(dateMatching: $0, repeats: true)
-        }
-    }
 }

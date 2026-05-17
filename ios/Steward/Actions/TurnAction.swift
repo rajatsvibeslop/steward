@@ -235,6 +235,12 @@ enum InverseAction: Codable, Sendable, Equatable {
     /// Undo a `notification.schedule` — cancel the scheduled notification.
     case cancelNotification(notificationID: String)
 
+    /// Undo a `notification.schedule_recurring` — cancel the recurring rule
+    /// AND any of its pending occurrences. Without this, undoing a recurring
+    /// schedule would cancel today's occurrence but the next `topUpHorizon`
+    /// would re-issue it from the still-active rule row (deslop regression B).
+    case cancelRecurringRule(ruleID: String)
+
     /// Replay all events for the instrument EXCEPT this one and recompute
     /// state from `initialState`. Cheap because instrument event cardinality
     /// is daily (addendum §1.6).
@@ -315,6 +321,7 @@ enum InverseActionKind: String, Codable, Sendable, CaseIterable {
     case deleteReminder
     case rescheduleNotification
     case cancelNotification
+    case cancelRecurringRule
     case revertInstrumentEvent
     case archiveDomain
     case unarchiveDomain
@@ -332,6 +339,7 @@ extension InverseAction {
         case .deleteReminder:          return .deleteReminder
         case .rescheduleNotification:  return .rescheduleNotification
         case .cancelNotification:      return .cancelNotification
+        case .cancelRecurringRule:     return .cancelRecurringRule
         case .revertInstrumentEvent:   return .revertInstrumentEvent
         case .archiveDomain:           return .archiveDomain
         case .unarchiveDomain:         return .unarchiveDomain

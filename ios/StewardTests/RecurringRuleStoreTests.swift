@@ -154,6 +154,61 @@ final class RecurringRuleStoreTests: XCTestCase {
         XCTAssertEqual(pending.count, 7, "topUpHorizon should re-issue 7 daily briefs")
     }
 
+    // MARK: - Undo-of-schedule_recurring must not be re-issued on topUp (regression B)
+
+    func testUndo_OfRecurringSchedule_DoesNotReissueOnTopUp() async throws {
+        // Persist a recurring rule, simulate the rule getting "undone" by
+        // flipping its cancelled_at via the store, then run topUpHorizon —
+        // assert zero occurrences come back. This is the deslop regression B
+        // pact: undoing notification.schedule_recurring must STAY undone
+        // across foreground ticks.
+        let (store, _, dir) = try await makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let record = RecurringRuleRecord(
+            rrule: "FREQ=DAILY;BYHOUR=7;BYMINUTE=0",
+            kind: .morningBrief,
+            templateContextJSON: "{}",
+            priority: 100
+        )
+        _ = try await store.insert(record)
+
+        let center = FakeUNCenter()
+        let tz = TimeZone(identifier: "America/New_York")!
+        var noonComps = DateComponents()
+        noonComps.year = 2026; noonComps.month = 5; noonComps.day = 17
+        noonComps.hour = 12; noonComps.minute = 0
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = tz
+        let clock = FixedClock(cal.date(from: noonComps)!)
+
+        let scheduler = NotificationScheduler(
+            center: center,
+            settings: FakeSettingsProvider(snapshot: defaultTestSettings()),
+            clock: clock,
+            timeZone: { tz },
+            ruleStore: { store }
+        )
+
+        // First top-up issues all 7 days as expected.
+        await scheduler.topUpHorizon(daysAhead: 7)
+        let initial = (await center.pendingNotificationRequests()).count
+        XCTAssertEqual(initial, 7, "baseline: rule active → 7 occurrences scheduled")
+
+        // Simulate undo: scheduler.cancelRule clears pending + flips
+        // rule.cancelled_at. This is the exact path UndoExecutor takes for
+        // `.cancelRecurringRule(ruleID:)`.
+        await scheduler.cancelRule(ruleID: record.ruleID)
+        let afterCancel = (await center.pendingNotificationRequests()).count
+        XCTAssertEqual(afterCancel, 0, "cancelRule must remove every pending occurrence")
+
+        // Next foreground tick must NOT reissue — rule is cancelled. If the
+        // rule lookup didn't filter by cancelled_at, this would re-schedule
+        // all 7 days and the test would fail.
+        await scheduler.topUpHorizon(daysAhead: 7)
+        let afterTopUp = (await center.pendingNotificationRequests()).count
+        XCTAssertEqual(afterTopUp, 0, "topUpHorizon must NOT re-issue a cancelled rule")
+    }
+
     private func defaultTestSettings() -> Settings {
         Settings(
             quietHours: Settings.QuietHours(start: "22:00", end: "05:00"),

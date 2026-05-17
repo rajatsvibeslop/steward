@@ -37,13 +37,14 @@ final class UndoExecutorTests: XCTestCase {
                 templateContext: TemplateContext()
             )),
             .cancelNotification(notificationID: "notif-1"),
+            .cancelRecurringRule(ruleID: "rule-1"),
             .revertInstrumentEvent(instrumentID: "inst-1", eventIDToReverse: EventID.generate()),
             .archiveDomain(domain: "health", archivedAt: Date()),
             .unarchiveDomain(domain: "health"),
             .forgetMemory(memoryID: MemoryID(rawValue: "m-1")),
             .unforgetMemory(memoryID: MemoryID(rawValue: "m-1"))
         ]
-        XCTAssertEqual(cases.count, 12, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
+        XCTAssertEqual(cases.count, 13, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
 
         // Parity: every InverseAction must map to an InverseActionKind. If
         // someone adds a case to one enum but forgets the other, the

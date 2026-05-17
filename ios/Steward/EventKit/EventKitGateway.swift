@@ -183,6 +183,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return .permissionRequired(scope: scope)
         case .permissionDenied(let s, let h): return .permissionDenied(scope: s, hint: h)
+        case .systemError(let s, let h): return .systemError(scope: s, hint: h)
         }
 
         let candidateCalendars: [EKCalendar]?
@@ -228,6 +229,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return (.permissionRequired(scope: scope), nil)
         case .permissionDenied(let s, let h): return (.permissionDenied(scope: s, hint: h), nil)
+        case .systemError(let s, let h): return (.systemError(scope: s, hint: h), nil)
         }
 
         let event = store.newEvent()
@@ -248,7 +250,7 @@ actor EventKitGateway {
         do {
             try store.save(event, span: .thisEvent, commit: true)
         } catch {
-            return (.permissionDenied(scope: scope, hint: "Calendar save failed: \(error.localizedDescription)"), nil)
+            return (.systemError(scope: scope, hint: "Calendar save failed: \(error.localizedDescription)"), nil)
         }
 
         let payload = CalendarEventPayload(
@@ -282,6 +284,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return (.permissionRequired(scope: scope), nil)
         case .permissionDenied(let s, let h): return (.permissionDenied(scope: s, hint: h), nil)
+        case .systemError(let s, let h): return (.systemError(scope: s, hint: h), nil)
         }
 
         guard let event = store.event(withIdentifier: args.ekEventID) else {
@@ -310,7 +313,7 @@ actor EventKitGateway {
         do {
             try store.save(event, span: .thisEvent, commit: true)
         } catch {
-            return (.permissionDenied(scope: scope, hint: "Calendar save failed: \(error.localizedDescription)"), nil)
+            return (.systemError(scope: scope, hint: "Calendar save failed: \(error.localizedDescription)"), nil)
         }
         let dto: [String: AnyEncodable] = [
             "ek_event_id": AnyEncodable(event.eventIdentifier ?? args.ekEventID),
@@ -326,6 +329,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return (.permissionRequired(scope: scope), nil)
         case .permissionDenied(let s, let h): return (.permissionDenied(scope: s, hint: h), nil)
+        case .systemError(let s, let h): return (.systemError(scope: s, hint: h), nil)
         }
         guard let event = store.event(withIdentifier: args.ekEventID) else {
             return (.ok(payloadJSON: "{\"deleted\":false,\"reason\":\"not_found\"}"), nil)
@@ -345,7 +349,7 @@ actor EventKitGateway {
         do {
             try store.remove(event, span: .thisEvent, commit: true)
         } catch {
-            return (.permissionDenied(scope: scope, hint: "Calendar delete failed: \(error.localizedDescription)"), nil)
+            return (.systemError(scope: scope, hint: "Calendar delete failed: \(error.localizedDescription)"), nil)
         }
         return (.ok(payloadJSON: "{\"deleted\":true}"), snapshot)
     }
@@ -356,6 +360,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return (.permissionRequired(scope: scope), nil)
         case .permissionDenied(let s, let h): return (.permissionDenied(scope: s, hint: h), nil)
+        case .systemError(let s, let h): return (.systemError(scope: s, hint: h), nil)
         }
 
         let reminder = store.newReminder()
@@ -380,7 +385,7 @@ actor EventKitGateway {
         do {
             try store.save(reminder, commit: true)
         } catch {
-            return (.permissionDenied(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)"), nil)
+            return (.systemError(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)"), nil)
         }
         let payload = ReminderPayload(
             title: reminder.title,
@@ -405,6 +410,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return .permissionRequired(scope: scope)
         case .permissionDenied(let s, let h): return .permissionDenied(scope: s, hint: h)
+        case .systemError(let s, let h): return .systemError(scope: s, hint: h)
         }
         guard let item = store.calendarItem(withIdentifier: args.ekReminderID) as? EKReminder else {
             return .ok(payloadJSON: "{\"completed\":false,\"reason\":\"not_found\"}")
@@ -413,7 +419,7 @@ actor EventKitGateway {
         do {
             try store.save(item, commit: true)
         } catch {
-            return .permissionDenied(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)")
+            return .systemError(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)")
         }
         return .ok(payloadJSON: "{\"completed\":true}")
     }
@@ -428,6 +434,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return .permissionRequired(scope: scope)
         case .permissionDenied(let s, let h): return .permissionDenied(scope: s, hint: h)
+        case .systemError(let s, let h): return .systemError(scope: s, hint: h)
         }
         guard let item = store.calendarItem(withIdentifier: ekReminderID) as? EKReminder else {
             return .ok(payloadJSON: "{\"reopened\":false,\"reason\":\"not_found\"}")
@@ -436,7 +443,7 @@ actor EventKitGateway {
         do {
             try store.save(item, commit: true)
         } catch {
-            return .permissionDenied(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)")
+            return .systemError(scope: scope, hint: "Reminder save failed: \(error.localizedDescription)")
         }
         return .ok(payloadJSON: "{\"reopened\":true}")
     }
@@ -448,6 +455,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return .permissionRequired(scope: scope)
         case .permissionDenied(let s, let h): return .permissionDenied(scope: s, hint: h)
+        case .systemError(let s, let h): return .systemError(scope: s, hint: h)
         }
         guard let item = store.calendarItem(withIdentifier: ekReminderID) as? EKReminder else {
             return .ok(payloadJSON: "{\"deleted\":false,\"reason\":\"not_found\"}")
@@ -455,7 +463,7 @@ actor EventKitGateway {
         do {
             try store.remove(item, commit: true)
         } catch {
-            return .permissionDenied(scope: scope, hint: "Reminder remove failed: \(error.localizedDescription)")
+            return .systemError(scope: scope, hint: "Reminder remove failed: \(error.localizedDescription)")
         }
         return .ok(payloadJSON: "{\"deleted\":true}")
     }
@@ -466,6 +474,7 @@ actor EventKitGateway {
         case .ok: break
         case .permissionRequired: return .permissionRequired(scope: scope)
         case .permissionDenied(let s, let h): return .permissionDenied(scope: s, hint: h)
+        case .systemError(let s, let h): return .systemError(scope: s, hint: h)
         }
         let calendars: [EKCalendar]?
         if let listName = args.listName {

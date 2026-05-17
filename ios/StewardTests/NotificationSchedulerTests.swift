@@ -361,7 +361,7 @@ final class NotificationSchedulerTests: XCTestCase {
             fireAt: noon,
             templateContext: TemplateContext(briefTimeDisplay: "7am")
         )
-        let outcome = await sched.scheduleRecurring(rule, request: baseRequest, scope: .coordinator)
+        let (outcome, _) = await sched.scheduleRecurring(rule, request: baseRequest, scope: .coordinator)
         if case .scheduled(_, let firesAt) = outcome {
             // Expected: first occurrence's fire time is tomorrow 7am NYC.
             let comps = cal.dateComponents([.hour, .minute], from: firesAt)

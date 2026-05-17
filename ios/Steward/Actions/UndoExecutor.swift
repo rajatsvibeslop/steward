@@ -86,13 +86,7 @@ actor UndoExecutor {
                 reasoning: "undo:restore_calendar_event"
             )
             let (result, _) = await gateway.executeCalendarWrite(args)
-            switch result {
-            case .ok: return
-            case .permissionRequired(let scope):
-                throw UndoExecutorError.backendFailure("permission required: \(scope.rawValue)")
-            case .permissionDenied(_, let hint):
-                throw UndoExecutorError.backendFailure("permission denied: \(hint)")
-            }
+            try requireOK(result)
 
         case .deleteCalendarEvent(let ekEventID, _):
             let args = CalendarDeleteArgs(ekEventID: ekEventID, reasoning: "undo:delete_calendar_event")
@@ -157,6 +151,14 @@ actor UndoExecutor {
         case .cancelNotification(let notificationID):
             await scheduler.cancel(id: NotificationID(rawValue: notificationID))
 
+        case .cancelRecurringRule(let ruleID):
+            // Undo of `notification.schedule_recurring`: flip the rule's
+            // `cancelled_at` AND remove its pending occurrences from UN.
+            // Without the rule-flip step, the next `topUpHorizon` (foreground
+            // tick + BGAppRefreshTask) would re-issue what the user just
+            // undid (deslop regression B).
+            await scheduler.cancelRule(ruleID: ruleID)
+
         // ---- Cross-pod cases (Track C owns the real handlers) ----
         //
         // Per arch's redirect: NOT-YET-IMPLEMENTED uses explicit case +
@@ -186,6 +188,8 @@ actor UndoExecutor {
             throw UndoExecutorError.backendFailure("permission required: \(scope.rawValue)")
         case .permissionDenied(_, let hint):
             throw UndoExecutorError.backendFailure("permission denied: \(hint)")
+        case .systemError(_, let hint):
+            throw UndoExecutorError.backendFailure("system error: \(hint)")
         }
     }
 }

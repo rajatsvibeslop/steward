@@ -243,12 +243,16 @@ actor NotificationScheduler {
         return .scheduled(notificationID: unRequestID, firesAt: req.fireAt)
     }
 
+    /// Returns both the first-occurrence outcome AND the persisted ruleID.
+    /// Callers (notably `NotificationScheduleRecurringTool`) need the ruleID
+    /// to emit a `.cancelRecurringRule(ruleID:)` inverse so undo cancels the
+    /// rule itself, not just the first occurrence (deslop regression B).
     func scheduleRecurring(
         _ rule: RRuleSubset,
         request: NotificationRequest,
         scope: AgentScope,
         rrule: String? = nil
-    ) async -> ScheduleOutcome {
+    ) async -> (outcome: ScheduleOutcome, ruleID: String?) {
         // Recurring rules are pre-expanded into the next 7 days of concrete
         // fire dates and scheduled through `scheduleInternal(_:scope:ruleID:)`
         // so cap math still applies per spec §10. Pure UN repeating triggers
@@ -262,7 +266,7 @@ actor NotificationScheduler {
             timeZone: timeZoneProvider()
         )
         guard !occurrences.isEmpty else {
-            return .systemError(reason: "no_occurrences_in_horizon")
+            return (.systemError(reason: "no_occurrences_in_horizon"), nil)
         }
 
         // Persist the rule so `topUpHorizon` can re-expand it on every
@@ -294,11 +298,7 @@ actor NotificationScheduler {
                 _ = try await store.insert(record)
                 persistedRuleID = record.ruleID
             } catch {
-                // Rule persistence failure isn't fatal — we can still
-                // schedule the next 7 days; subsequent top-ups just won't
-                // re-issue beyond that horizon. Surface as system error so
-                // the audit log sees the truth.
-                return .systemError(reason: "rule_persist_failed: \(error)")
+                return (.systemError(reason: "rule_persist_failed: \(error)"), nil)
             }
         } else {
             persistedRuleID = nil
@@ -312,10 +312,23 @@ actor NotificationScheduler {
             occRequest.fireAt = occ
             let outcome = await scheduleInternal(occRequest, scope: scope, ruleID: persistedRuleID)
             if firstOutcome == nil { firstOutcome = outcome }
-            // Continue scheduling subsequent occurrences regardless of this
-            // one's outcome — a later day might fit even if today doesn't.
         }
-        return firstOutcome ?? .systemError(reason: "no_occurrences_scheduled")
+        return (firstOutcome ?? .systemError(reason: "no_occurrences_scheduled"), persistedRuleID)
+    }
+
+    /// Cancel a recurring rule by its persisted ID. Flips `cancelled_at` in
+    /// the store AND drops every pending occurrence that came from this rule.
+    /// Used by `UndoExecutor` for the `.cancelRecurringRule` inverse.
+    func cancelRule(ruleID: String) async {
+        let toCancel = scheduled.filter { $0.ruleID == ruleID }
+        let ids = toCancel.map(\.unRequestIdentifier)
+        if !ids.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+            scheduled.removeAll { $0.ruleID == ruleID }
+        }
+        if let store = ruleStoreProvider() {
+            try? await store.cancel(ruleID: ruleID)
+        }
     }
 
     /// Cancel a single scheduled occurrence by NotificationID (the typed wrapper

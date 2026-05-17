@@ -28,12 +28,18 @@ enum EKPermissionScope: String, Codable, Sendable, Equatable, CaseIterable {
 // MARK: - CalendarToolResult
 
 /// Hybrid permission lifecycle result type (addendum §1.9). The LLM only sees
-/// `.ok` and `.permissionDenied` (hard reject #19). `.permissionRequired` is
-/// intercepted by the UI for the inline-grant flow.
+/// `.ok`, `.permissionDenied`, and `.systemError` (hard reject #19 —
+/// `.permissionRequired` is intercepted by the UI for the inline-grant flow).
+///
+/// `.systemError` is distinct from `.permissionDenied` because misclassifying
+/// a transient EventKit save failure as "user revoked Calendar" sends the LLM
+/// down the wrong recovery path (it'll politely apologize and offer to skip
+/// instead of suggesting the user check their iCloud sync).
 enum CalendarToolResult: Sendable {
     case ok(payloadJSON: String)
     case permissionRequired(scope: EKPermissionScope)
     case permissionDenied(scope: EKPermissionScope, hint: String)
+    case systemError(scope: EKPermissionScope, hint: String)
 }
 
 extension CalendarToolResult {
@@ -43,6 +49,11 @@ extension CalendarToolResult {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
         enc.outputFormatting = [.sortedKeys]
+        struct Body: Codable {
+            let status: String
+            let scope: String
+            let hint: String
+        }
         switch self {
         case .ok(let payload):
             return payload
@@ -50,12 +61,11 @@ extension CalendarToolResult {
             // Hard reject #19: never serialize this for the LLM.
             return nil
         case .permissionDenied(let scope, let hint):
-            struct Body: Codable {
-                let status: String
-                let scope: String
-                let hint: String
-            }
             let data = try enc.encode(Body(status: "permission_denied",
+                                            scope: scope.rawValue, hint: hint))
+            return String(data: data, encoding: .utf8)
+        case .systemError(let scope, let hint):
+            let data = try enc.encode(Body(status: "system_error",
                                             scope: scope.rawValue, hint: hint))
             return String(data: data, encoding: .utf8)
         }

@@ -89,6 +89,8 @@ struct ScheduleOutcomeWire: Codable, Sendable, Equatable {
             return .init(status: "suppressed_quiet_hours", reason: nil, nextAvailableSlot: nil, rescheduledTo: resched)
         case .suppressedByPause:
             return .init(status: "suppressed_pause", reason: nil, nextAvailableSlot: nil, rescheduledTo: nil)
+        case .systemError(let reason):
+            return .init(status: "system_error", reason: reason, nextAvailableSlot: nil, rescheduledTo: nil)
         }
     }
 }
@@ -290,15 +292,25 @@ actor NotificationScheduleRecurringTool: LLMTool {
             actionContextJSON: args.actionContextJSON,
             priority: args.kind == .morningBrief ? 100 : 10
         )
-        let outcome = await scheduler.scheduleRecurring(rule, request: baseRequest, scope: .coordinator)
+        let (outcome, ruleID) = await scheduler.scheduleRecurring(
+            rule, request: baseRequest, scope: .coordinator, rrule: args.recurrenceRule
+        )
 
-        if case .scheduled(let unID, _) = outcome {
+        // Emit `.cancelRecurringRule(ruleID:)` as the inverse — NOT
+        // `.cancelNotification(...)`, which only cancels the first occurrence
+        // and leaves the rule active for topUpHorizon to re-issue (deslop
+        // regression B). The audit row is only written when both (a) the
+        // first occurrence scheduled successfully AND (b) the rule was
+        // actually persisted (ruleID non-nil); otherwise undo would have
+        // nothing to cancel and the row would be a permanently-broken
+        // audit-log entry.
+        if case .scheduled = outcome, let ruleID {
             let turnAction = TurnAction(
                 turnID: turnIDProvider(),
                 toolID: .notificationScheduleRecurring,
                 actor: .coordinator,
                 reasoning: args.reasoning,
-                inverse: .cancelNotification(notificationID: unID)
+                inverse: .cancelRecurringRule(ruleID: ruleID)
             )
             do {
                 _ = try await auditLog.recordAgentAction(

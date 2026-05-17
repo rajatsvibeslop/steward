@@ -353,16 +353,26 @@ private func wireOrThrow(_ result: CalendarToolResult) throws -> String {
         throw PermissionRequiredSignal(scope: scope)
     case .permissionDenied(let scope, let hint):
         // LLM-visible structured tool_error.
-        let enc = JSONEncoder()
-        enc.outputFormatting = [.sortedKeys]
-        let body: [String: String] = [
-            "status": "permission_denied",
-            "scope": scope.rawValue,
-            "hint": hint
-        ]
-        let data = try enc.encode(body)
-        return String(data: data, encoding: .utf8) ?? "{\"status\":\"permission_denied\"}"
+        return try encodeStatus("permission_denied", scope: scope, hint: hint)
+    case .systemError(let scope, let hint):
+        // LLM-visible structured tool_error — distinct status so the model
+        // doesn't conflate a transient EventKit save failure with a
+        // permission revoke. Encourages "ask user to retry" routing rather
+        // than "skip and apologize."
+        return try encodeStatus("system_error", scope: scope, hint: hint)
     }
+}
+
+private func encodeStatus(_ status: String, scope: EKPermissionScope, hint: String) throws -> String {
+    let enc = JSONEncoder()
+    enc.outputFormatting = [.sortedKeys]
+    let body: [String: String] = [
+        "status": status,
+        "scope": scope.rawValue,
+        "hint": hint
+    ]
+    let data = try enc.encode(body)
+    return String(data: data, encoding: .utf8) ?? "{\"status\":\"\(status)\"}"
 }
 
 /// Signal type thrown by EventKit tools when the result is `.permissionRequired`.

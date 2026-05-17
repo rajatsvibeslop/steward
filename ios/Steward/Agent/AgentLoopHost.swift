@@ -1,5 +1,5 @@
 //
-//  AgentLoopSingleton.swift
+//  AgentLoopHost.swift
 //  Steward
 //
 //  Process-wide container that builds the `AgentLoop` (Agent/AgentLoop.swift)

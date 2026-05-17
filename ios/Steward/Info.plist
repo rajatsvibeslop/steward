@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Steward</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- EventKit (iOS 17+ new permission model; iOS 26 enforces .fullAccess) -->
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Steward helps you manage time-based commitments and brief you on what's coming up.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Steward turns chat-spoken commitments into Reminders that show up on your lock screen.</string>
+
+	<!-- Voice capture -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Steward lets you log events by voice instead of typing.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Steward uses on-device speech recognition to turn what you say into log entries.</string>
+
+	<!-- iCloud Drive document scope. CSV mirror lives under iCloud Drive / Steward / -->
+	<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+	<true/>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.rajatscode.steward</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+			<key>NSUbiquitousContainerName</key>
+			<string>Steward</string>
+		</dict>
+	</dict>
+
+	<!-- BGTaskScheduler identifiers; Track D wires handlers. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.rajatscode.steward.refresh</string>
+		<string>com.rajatscode.steward.processing</string>
+	</array>
+
+	<!-- Background modes (BGAppRefreshTask + BGProcessingTask). -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+</dict>
+</plist>

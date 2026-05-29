@@ -309,6 +309,24 @@ struct MockResponsePlan: Sendable, Equatable {
         }
 
         // -----------------------------------------------------------------
+        // Workbook intents — let the user demo the sheet pipeline in sim
+        // (Foundation Models doesn't run on x86_64, so without these the
+        // chat can't drive the Workbook surface end-to-end).
+        //
+        // Gated on inFreeChat so the empty-state script (Branch A/B/C,
+        // turn 2 "track my sleep" → Health team proposal) still wins
+        // during the first-launch onboarding.
+        // -----------------------------------------------------------------
+        if convoState == .inFreeChat {
+            if let topic = parseTrackIntent(lowered) {
+                return sheetCreatePlan(topic: topic)
+            }
+            if let query = parseWebSearchIntent(lowered) {
+                return webSearchPlan(query: query)
+            }
+        }
+
+        // -----------------------------------------------------------------
         // Morning-brief refresh (Today tab calls coordinator with a fixed
         // prompt; the mock returns deterministic copy so the brief card
         // doesn't render "[MOCK] Got it." back at the user).
@@ -557,6 +575,98 @@ struct MockResponsePlan: Sendable, Equatable {
         )
     }
 
+    // MARK: - Workbook sub-plans (sim-only)
+
+    /// "track my sleep" / "start tracking workouts" → spawn a sheet
+    /// with a sensible default schema for the topic. Topic-specific
+    /// columns are hand-coded for the handful of likely first-tries;
+    /// anything unrecognized falls back to a generic date + value
+    /// schema so the user still gets a working sheet.
+    private static func sheetCreatePlan(topic: String) -> MockResponsePlan {
+        let (displayName, columns) = sheetSchemaForTopic(topic)
+        let columnSpecsJSON = columns
+            .map { spec -> String in
+                let unitClause = spec.unit.map { ",\"unit\":\"\($0)\"" } ?? ""
+                return "{\"name\":\"\(spec.name)\",\"kind\":\"\(spec.kind.rawValue)\"\(unitClause)}"
+            }
+            .joined(separator: ",")
+        let argsJSON = """
+        {"display_name":"\(displayName)","description":null,"columns":[\(columnSpecsJSON)],"reasoning":"[MOCK] user asked to track \(topic); spawning a sheet with default columns","actor":"coordinator"}
+        """
+        let columnNames = columns.map(\.name).joined(separator: ", ")
+        return MockResponsePlan(
+            text: "[MOCK] Started a sheet called \"\(displayName)\" with columns: \(columnNames). Open the Workbook tab to see it; tap a cell to edit.",
+            toolCalls: [.init(toolID: ToolID.sheetCreate.rawValue, argsJSON: argsJSON)]
+        )
+    }
+
+    /// Topic-specific defaults. Falls back to a generic schema for any
+    /// noun we don't have a hand-rolled case for.
+    private static func sheetSchemaForTopic(_ topic: String) -> (displayName: String, columns: [SchemaSpec]) {
+        let lowered = topic.lowercased()
+        switch lowered {
+        case "sleep":
+            return ("Sleep", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "hours", kind: .number, unit: "h"),
+                SchemaSpec(name: "notes", kind: .text, unit: nil),
+            ])
+        case "weight":
+            return ("Weight", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "lbs", kind: .number, unit: "lbs"),
+            ])
+        case "time", "work", "productivity":
+            return ("Time", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "activity", kind: .text, unit: nil),
+                SchemaSpec(name: "minutes", kind: .duration, unit: "min"),
+            ])
+        case "money", "spend", "spending", "budget":
+            return ("Money", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "category", kind: .text, unit: nil),
+                SchemaSpec(name: "amount", kind: .currency, unit: "$"),
+                SchemaSpec(name: "notes", kind: .text, unit: nil),
+            ])
+        case "workouts", "workout", "exercise", "training":
+            return ("Workouts", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "kind", kind: .text, unit: nil),
+                SchemaSpec(name: "minutes", kind: .duration, unit: "min"),
+            ])
+        case "food", "meals", "eating":
+            return ("Food", [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "meal", kind: .text, unit: nil),
+                SchemaSpec(name: "calories", kind: .number, unit: "kcal"),
+            ])
+        default:
+            let displayName = topic.prefix(1).uppercased() + topic.dropFirst()
+            return (String(displayName), [
+                SchemaSpec(name: "date", kind: .date, unit: nil),
+                SchemaSpec(name: "value", kind: .number, unit: nil),
+                SchemaSpec(name: "notes", kind: .text, unit: nil),
+            ])
+        }
+    }
+
+    /// "search for X" / "look up X" → web.search
+    private static func webSearchPlan(query: String) -> MockResponsePlan {
+        let escaped = query.replacingOccurrences(of: "\"", with: "\\\"")
+        let argsJSON = "{\"query\":\"\(escaped)\"}"
+        return MockResponsePlan(
+            text: "[MOCK] Searching Wikipedia for \"\(query)\"…",
+            toolCalls: [.init(toolID: ToolID.webSearch.rawValue, argsJSON: argsJSON)]
+        )
+    }
+
+    private struct SchemaSpec {
+        let name: String
+        let kind: SheetColumnKind
+        let unit: String?
+    }
+
     private static func morningBriefPlan() -> MockResponsePlan {
         // Deterministic copy — no fake numbers, no moralizing. The text
         // makes it explicit we're on the stub backend so the user knows
@@ -678,6 +788,69 @@ struct MockResponsePlan: Sendable, Equatable {
 
     private static func containsDigit(_ s: String) -> Bool {
         return s.unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) })
+    }
+
+    /// Parse a "track my X" / "start tracking X" intent. Returns the
+    /// topic noun or nil if no match. Matching is generous so common
+    /// phrasings work: "track sleep", "let's track my workouts",
+    /// "i want to start tracking money", etc.
+    static func parseTrackIntent(_ lowered: String) -> String? {
+        // Phrases that should NOT trigger sheet creation (they're
+        // handled by other dispatch arms above, so reaching this code
+        // path means none of those matched — but be defensive).
+        if lowered.contains("how am i doing") { return nil }
+
+        let triggers = [
+            "track my ",
+            "start tracking ",
+            "let's track ",
+            "lets track ",
+            "i want to track ",
+            "track ",
+        ]
+        for trigger in triggers {
+            guard let range = lowered.range(of: trigger) else { continue }
+            let after = lowered[range.upperBound...]
+            // Stop on punctuation or " for " / " with " / " until " etc.
+            let stopMarkers: Set<Character> = [".", ",", "!", "?", ";"]
+            var topic = ""
+            for ch in after {
+                if stopMarkers.contains(ch) { break }
+                topic.append(ch)
+            }
+            let trimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Pull off leading articles.
+            let cleaned = trimmed
+                .replacingOccurrences(of: "my ", with: "", options: .anchored)
+                .replacingOccurrences(of: "the ", with: "", options: .anchored)
+                .replacingOccurrences(of: "some ", with: "", options: .anchored)
+            // Take the first word — schemas key off a single noun.
+            let firstWord = cleaned.split(whereSeparator: { $0.isWhitespace }).first
+            guard let word = firstWord, !word.isEmpty else { continue }
+            return String(word)
+        }
+        return nil
+    }
+
+    /// Parse a "search for X" / "look up X" intent.
+    static func parseWebSearchIntent(_ lowered: String) -> String? {
+        let triggers = [
+            "search for ",
+            "search wikipedia for ",
+            "look up ",
+            "what is ",
+            "what's ",
+            "who is ",
+            "who's ",
+        ]
+        for trigger in triggers {
+            guard let range = lowered.range(of: trigger) else { continue }
+            let after = lowered[range.upperBound...]
+            let trimmed = after.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "?.!"))
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return nil
     }
 
     private static func isMorningBriefRequest(lowered: String) -> Bool {

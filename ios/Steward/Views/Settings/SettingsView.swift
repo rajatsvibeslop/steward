@@ -9,7 +9,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @StateObject private var viewModel = SettingsViewModel()
-    @Binding var selectedTab: RootTabView.Tab
+    /// Invoked when the "Add a team via chat" row is tapped. With the
+    /// sparkle chat overlay this presents the chat sheet rather than
+    /// switching tabs.
+    var onOpenChat: () -> Void = {}
 
     var body: some View {
         NavigationStack {
@@ -22,7 +25,7 @@ struct SettingsView: View {
                 }
                 LifeTeamsSection(
                     domains: viewModel.domains,
-                    onOpenChat: { selectedTab = .chat },
+                    onOpenChat: onOpenChat,
                     onRefresh: { await viewModel.load() }
                 )
                 Section("ACTIVITY") {

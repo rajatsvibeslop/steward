@@ -2,10 +2,16 @@
 //  RootTabView.swift
 //  Steward
 //
-//  Replaces the v0 RootView. Three tabs in fixed order — Chat, Today,
-//  Settings — per Designer §0 ("Default launch tab: Chat"). The selection
-//  binding is exposed so the Today empty-state and "+ Add a team via chat"
-//  Settings row can switch tabs programmatically.
+//  The app's root. Per the rework direction, the chat is no longer a
+//  tab — it's an omnipresent sparkle button in the corner that
+//  presents the agent in a sheet over whatever you were doing. The
+//  tabs that remain are the surfaces you go *to* (Today / Workbook /
+//  Settings); the agent comes *with* you.
+//
+//  Notification taps open the chat sheet automatically; on cold launch
+//  ChatView drains the buffered tap from NotificationActionRouter so
+//  the routing still works even before the sheet had a chance to
+//  subscribe.
 //
 
 import SwiftUI
@@ -13,19 +19,46 @@ import SwiftUI
 struct RootTabView: View {
     @EnvironmentObject private var bootstrap: AppBootstrap
 
-    enum Tab: Hashable { case chat, today, workbook, settings }
+    enum Tab: Hashable { case today, workbook, settings }
 
-    @State private var selectedTab: Tab = .chat
+    @State private var selectedTab: Tab = .today
+    @State private var isChatPresented: Bool = false
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ChatView()
-                .tabItem {
-                    Label("Chat", systemImage: "bubble.left.and.bubble.right")
+        ZStack(alignment: .bottomTrailing) {
+            tabContent
+                .overlay(alignment: .top) {
+                    BootstrapBanner(phase: bootstrap.phase)
                 }
-                .tag(Tab.chat)
+            // Sparkle button is positioned above the tab bar — generous
+            // bottom inset so it clears both the safe area and the tab
+            // indicator on devices without a home button.
+            SparkleChatButton(action: { isChatPresented = true })
+                .padding(.trailing, 16)
+                .padding(.bottom, 88)
+        }
+        .sheet(isPresented: $isChatPresented) {
+            // ChatView's own NavigationStack provides the nav bar inside
+            // the sheet; medium + large detents let the user keep the
+            // surface they were on partially visible.
+            ChatView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: .stewardNotificationTapped
+        )) { _ in
+            // Any tap on a banner / lock-screen notification opens chat.
+            // ChatView's task block reads the buffered TapEvent from
+            // NotificationActionRouter and injects the suggested prompt.
+            isChatPresented = true
+        }
+    }
 
-            TodayView(selectedTab: $selectedTab)
+    @ViewBuilder
+    private var tabContent: some View {
+        TabView(selection: $selectedTab) {
+            TodayView(onOpenChat: { isChatPresented = true })
                 .tabItem {
                     Label("Today", systemImage: "sun.horizon")
                 }
@@ -37,25 +70,13 @@ struct RootTabView: View {
                 }
                 .tag(Tab.workbook)
 
-            SettingsView(selectedTab: $selectedTab)
+            SettingsView(onOpenChat: { isChatPresented = true })
                 .tabItem {
                     Label("Settings", systemImage: "slider.horizontal.3")
                 }
                 .tag(Tab.settings)
         }
         .tint(.accentColor)
-        .overlay(alignment: .top) {
-            BootstrapBanner(phase: bootstrap.phase)
-        }
-        .onReceive(NotificationCenter.default.publisher(
-            for: .stewardNotificationTapped
-        )) { _ in
-            // Notification tap always lands the user in Chat. ChatView
-            // (or its onAppear, for cold-launch) reads the buffered
-            // TapEvent from NotificationActionRouter.shared and injects
-            // the suggested prompt as a coordinator-initiated turn.
-            selectedTab = .chat
-        }
     }
 }
 

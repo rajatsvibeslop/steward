@@ -10,7 +10,10 @@ import SwiftUI
 
 struct TodayView: View {
     @StateObject private var viewModel = TodayViewModel()
-    @Binding var selectedTab: RootTabView.Tab
+    /// Invoked when the empty state's "head to Chat" affordance is tapped.
+    /// With the sparkle chat overlay this presents the chat sheet rather
+    /// than switching tabs.
+    var onOpenChat: () -> Void = {}
 
     var body: some View {
         NavigationStack {
@@ -20,7 +23,7 @@ struct TodayView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if viewModel.domains.isEmpty {
                     TodayEmptyState {
-                        selectedTab = .chat
+                        onOpenChat()
                     }
                 } else {
                     scrollContent

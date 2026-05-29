@@ -38,17 +38,10 @@ final class UndoExecutorTests: XCTestCase {
             )),
             .cancelNotification(notificationID: "notif-1"),
             .cancelRecurringRule(ruleID: "rule-1"),
-            .revertInstrumentEvent(instrumentID: "inst-1", eventIDToReverse: EventID.generate()),
             .archiveDomain(domain: "health", archivedAt: Date()),
             .unarchiveDomain(domain: "health"),
             .forgetMemory(memoryID: MemoryID(rawValue: "m-1")),
             .unforgetMemory(memoryID: MemoryID(rawValue: "m-1")),
-            .archiveInstrument(instrumentID: InstrumentID(rawValue: "inst-1")),
-            .unarchiveInstrument(instrumentID: InstrumentID(rawValue: "inst-1")),
-            .restoreInstrumentDefinition(
-                instrumentID: InstrumentID(rawValue: "inst-1"),
-                priorDefinitionJSON: "{}"
-            ),
             .deleteCommitment(commitmentID: CommitmentID(rawValue: "c-1")),
             .restoreCommitmentStatus(
                 commitmentID: CommitmentID(rawValue: "c-1"),
@@ -63,7 +56,7 @@ final class UndoExecutorTests: XCTestCase {
             ),
             .restoreDomainPrompt(domain: "health", priorRolePrompt: "old prompt")
         ]
-        XCTAssertEqual(cases.count, 20, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
+        XCTAssertEqual(cases.count, 16, "InverseAction case count drift: did you add a case without updating UndoExecutor?")
 
         // Parity: every InverseAction must map to an InverseActionKind. If
         // someone adds a case to one enum but forgets the other, the
@@ -88,7 +81,6 @@ final class UndoExecutorTests: XCTestCase {
         // notYetImplemented error; that contract has now flipped.
         let executor = UndoExecutor()
         let crossPodCases: [(InverseAction, InverseActionKind)] = [
-            (.revertInstrumentEvent(instrumentID: "i", eventIDToReverse: EventID.generate()), .revertInstrumentEvent),
             (.archiveDomain(domain: "d", archivedAt: Date()), .archiveDomain),
             (.unarchiveDomain(domain: "d"), .unarchiveDomain),
             (.forgetMemory(memoryID: MemoryID(rawValue: "m")), .forgetMemory),
@@ -326,152 +318,6 @@ final class UndoExecutorTests: XCTestCase {
         }
     }
 
-    func testRevertInstrumentEventRestoresInitialState() async throws {
-        // Round-trip: create a Checklist instrument with one item, apply a
-        // check event, then call .revertInstrumentEvent to roll it back. The
-        // recomputed state should match the initial state (no events
-        // applied). We use Checklist because its initial / event payloads
-        // are tiny and the diff is easy to assert.
-        InstrumentRegistry._resetForTesting()
-        InstrumentRegistry.bootstrapAll()
-
-        let (_, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let queue = try await provider.database()
-
-        let now = Date()
-        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
-        let instrumentID = InstrumentID(rawValue: "inst-checklist-1")
-        let definitionJSON = """
-        {"items":[{"id":"a","label":"morning walk"}]}
-        """
-        let initialStateJSON = try InstrumentRegistry.initialStateJSON(
-            forKind: "checklist", definitionJSON: definitionJSON, now: now
-        )
-        try await queue.write { db in
-            try db.execute(
-                sql: """
-                    INSERT INTO instruments
-                      (instrument_id, domain, kind, name, definition_json, state_json,
-                       state_version, created_at, last_updated_at)
-                    VALUES (?, 'health', 'checklist', 'walks', ?, ?, 1, ?, ?)
-                """,
-                arguments: [instrumentID, definitionJSON, initialStateJSON, nowMs, nowMs]
-            )
-        }
-
-        // Apply a check event via the same path the tool would use.
-        let eventID = EventID(rawValue: "evt-1")
-        let checkPayloadJSON = """
-        {"item_id":"a","checked":true}
-        """
-        let envelopeJSON = try InstrumentTools.makeEventEnvelopeJSON(
-            eventID: eventID,
-            instrumentID: instrumentID,
-            kind: "check",
-            actor: "coordinator",
-            createdAt: now,
-            payloadJSON: checkPayloadJSON,
-            notes: nil
-        )
-        try await queue.write { db in
-            try EventLog.append(
-                actor: .coordinator,
-                kind: "check",
-                instrumentID: instrumentID,
-                payloadJSON: checkPayloadJSON,
-                source: "tool",
-                reasoning: "test apply",
-                at: now,
-                eventID: eventID,
-                in: db
-            )
-            _ = try InstrumentRegistry.dispatchApply(
-                instrumentID: instrumentID,
-                eventJSON: envelopeJSON,
-                in: db,
-                now: now
-            )
-        }
-
-        // Sanity: post-apply state differs from initial.
-        let afterApply: String = try await queue.read { db in
-            try String.fetchOne(
-                db, sql: "SELECT state_json FROM instruments WHERE instrument_id = ?",
-                arguments: [instrumentID]
-            )!
-        }
-        XCTAssertNotEqual(afterApply, initialStateJSON, "state should change after applying the event")
-
-        // Undo.
-        let executor = makeExecutor(provider: provider)
-        try await executor.execute(.revertInstrumentEvent(
-            instrumentID: instrumentID.rawValue,
-            eventIDToReverse: eventID
-        ))
-
-        let afterUndo: String = try await queue.read { db in
-            try String.fetchOne(
-                db, sql: "SELECT state_json FROM instruments WHERE instrument_id = ?",
-                arguments: [instrumentID]
-            )!
-        }
-        XCTAssertEqual(afterUndo, initialStateJSON,
-                       "reverting the only event should restore the initial state")
-
-        // Audit trail: manual_correction event should exist.
-        let correctionCount: Int = try await queue.read { db in
-            try Int.fetchOne(
-                db,
-                sql: "SELECT COUNT(*) FROM events WHERE kind = 'manual_correction' AND instrument_id = ?",
-                arguments: [instrumentID]
-            ) ?? 0
-        }
-        XCTAssertEqual(correctionCount, 1, "revert should emit a single manual_correction event")
-    }
-
-    func testRevertInstrumentEventForUnknownEventThrows() async throws {
-        InstrumentRegistry._resetForTesting()
-        InstrumentRegistry.bootstrapAll()
-        let (_, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let queue = try await provider.database()
-        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let instrumentID = InstrumentID(rawValue: "inst-2")
-        let definitionJSON = """
-        {"items":[{"id":"a","label":"x"}]}
-        """
-        let initialStateJSON = try InstrumentRegistry.initialStateJSON(
-            forKind: "checklist", definitionJSON: definitionJSON, now: Date()
-        )
-        try await queue.write { db in
-            try db.execute(
-                sql: """
-                    INSERT INTO instruments
-                      (instrument_id, domain, kind, name, definition_json, state_json,
-                       state_version, created_at, last_updated_at)
-                    VALUES (?, 'health', 'checklist', 'walks', ?, ?, 1, ?, ?)
-                """,
-                arguments: [instrumentID, definitionJSON, initialStateJSON, nowMs, nowMs]
-            )
-        }
-        let executor = makeExecutor(provider: provider)
-        do {
-            try await executor.execute(.revertInstrumentEvent(
-                instrumentID: instrumentID.rawValue,
-                eventIDToReverse: EventID(rawValue: "no-such-event")
-            ))
-            XCTFail("expected throw for unknown event ID")
-        } catch let e as UndoExecutorError {
-            guard case .backendFailure = e else {
-                XCTFail("expected backendFailure, got \(e)")
-                return
-            }
-        }
-    }
-
-    // MARK: - Catalog tools persist TurnAction audit rows
-
     func testDomainArchiveToolPersistsTurnActionForUndo() async throws {
         let (audit, provider, dir) = try await makeAuditLog()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -514,29 +360,6 @@ final class UndoExecutorTests: XCTestCase {
 
     // MARK: - v1.1 patch: round-trips for the newly-reversible 7 cases
 
-    /// Insert a minimal instrument row so undo handlers have something to
-    /// mutate. Returns the row's ID.
-    private func seedInstrument(
-        provider: DatabaseProvider,
-        instrumentID: InstrumentID = InstrumentID(rawValue: "inst-seed-\(UUID().uuidString)"),
-        definitionJSON: String = "{\"items\":[]}"
-    ) async throws -> InstrumentID {
-        let queue = try await provider.database()
-        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        try await queue.write { db in
-            try db.execute(
-                sql: """
-                    INSERT INTO instruments
-                      (instrument_id, domain, kind, name, definition_json, state_json,
-                       state_version, created_at, last_updated_at)
-                    VALUES (?, 'health', 'checklist', 'seed', ?, '{}', 1, ?, ?)
-                """,
-                arguments: [instrumentID, definitionJSON, nowMs, nowMs]
-            )
-        }
-        return instrumentID
-    }
-
     private func seedCommitment(
         provider: DatabaseProvider,
         commitmentID: CommitmentID = CommitmentID(rawValue: "c-seed-\(UUID().uuidString)"),
@@ -578,79 +401,6 @@ final class UndoExecutorTests: XCTestCase {
                 arguments: [domain, domain.capitalized, rolePrompt, nowMs]
             )
         }
-    }
-
-    func testArchiveInstrumentRoundTrip() async throws {
-        let (_, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let queue = try await provider.database()
-        let id = try await seedInstrument(provider: provider)
-        let executor = makeExecutor(provider: provider)
-
-        // Apply archive → expect archived_at set.
-        try await executor.execute(.archiveInstrument(instrumentID: id))
-        let afterArchive: Int64? = try await queue.read { db in
-            try Int64.fetchOne(
-                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
-                arguments: [id]
-            )
-        }
-        XCTAssertNotNil(afterArchive, "archiveInstrument should set archived_at")
-
-        // Apply unarchive → expect cleared.
-        try await executor.execute(.unarchiveInstrument(instrumentID: id))
-        let afterUnarchive: Int64? = try await queue.read { db in
-            try Int64.fetchOne(
-                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
-                arguments: [id]
-            )
-        }
-        XCTAssertNil(afterUnarchive, "unarchiveInstrument should clear archived_at")
-    }
-
-    func testArchiveInstrumentMissingRowThrows() async throws {
-        let (_, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let executor = makeExecutor(provider: provider)
-        do {
-            try await executor.execute(
-                .archiveInstrument(instrumentID: InstrumentID(rawValue: "ghost"))
-            )
-            XCTFail("expected backendFailure for missing instrument row")
-        } catch let e as UndoExecutorError {
-            guard case .backendFailure = e else {
-                XCTFail("expected backendFailure, got \(e)")
-                return
-            }
-        }
-    }
-
-    func testRestoreInstrumentDefinitionRoundTrip() async throws {
-        let (_, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let queue = try await provider.database()
-        let original = "{\"items\":[{\"id\":\"a\",\"label\":\"original\"}]}"
-        let id = try await seedInstrument(provider: provider, definitionJSON: original)
-        // Mutate the definition to simulate the update tool having run.
-        try await queue.write { db in
-            try db.execute(
-                sql: "UPDATE instruments SET definition_json = ? WHERE instrument_id = ?",
-                arguments: ["{\"items\":[]}", id]
-            )
-        }
-
-        let executor = makeExecutor(provider: provider)
-        try await executor.execute(.restoreInstrumentDefinition(
-            instrumentID: id,
-            priorDefinitionJSON: original
-        ))
-        let restored: String? = try await queue.read { db in
-            try String.fetchOne(
-                db, sql: "SELECT definition_json FROM instruments WHERE instrument_id = ?",
-                arguments: [id]
-            )
-        }
-        XCTAssertEqual(restored, original)
     }
 
     func testDeleteCommitmentRoundTrip() async throws {
@@ -851,43 +601,6 @@ final class UndoExecutorTests: XCTestCase {
     }
 
     // MARK: - End-to-end: tool → audit row → executor
-
-    func testInstrumentCreateToolPersistsTurnActionAndUndoArchives() async throws {
-        InstrumentRegistry._resetForTesting()
-        InstrumentRegistry.bootstrapAll()
-        let (audit, provider, dir) = try await makeAuditLog()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let tool = InstrumentCreateTool(provider: provider, auditLog: audit)
-        let definitionJSON = "{\"items\":[{\"id\":\"a\",\"label\":\"walks\"}]}"
-        let argsJSON = """
-        {"kind":"checklist","name":"walks","domain":"health","definition_json":\(encodeAsJSONStringLiteral(definitionJSON)),"reasoning":"user asked","actor":"coordinator"}
-        """
-        _ = try await tool.invoke(argsJSON: argsJSON)
-        let queue = try await provider.database()
-        let eventID: String? = try await queue.read { db in
-            try String.fetchOne(
-                db,
-                sql: "SELECT event_id FROM events WHERE kind = ? ORDER BY created_at DESC LIMIT 1",
-                arguments: [ToolID.instrumentCreate.rawValue]
-            )
-        }
-        XCTAssertNotNil(eventID, "instrument.create must persist a kind='instrument.create' audit row")
-        let loaded = try await audit.loadTurnAction(eventID: EventID(rawValue: eventID!))
-        guard case .archiveInstrument(let archivedID) = loaded?.inverse else {
-            XCTFail("inverse must be .archiveInstrument")
-            return
-        }
-        // Run the undo and verify archived_at flips.
-        let executor = UndoExecutor(provider: provider, auditLog: audit)
-        try await executor.execute(.archiveInstrument(instrumentID: archivedID))
-        let archived: Int64? = try await queue.read { db in
-            try Int64.fetchOne(
-                db, sql: "SELECT archived_at FROM instruments WHERE instrument_id = ?",
-                arguments: [archivedID]
-            )
-        }
-        XCTAssertNotNil(archived, "undo should archive the freshly-created instrument")
-    }
 
     func testCommitmentCompleteToolPersistsTurnActionAndUndoRestores() async throws {
         let (audit, provider, dir) = try await makeAuditLog()

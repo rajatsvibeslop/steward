@@ -2,8 +2,11 @@
 //  StewardApp.swift
 //  Steward
 //
-//  app entry point: app entry point. Bootstraps the database on launch
-//  so the GRDB migrator runs before any view requests data.
+//  app entry point. Bootstraps the database on launch so the GRDB
+//  migrator runs before any view requests data. The workbook cleanup
+//  removed the InstrumentRegistry + InstrumentCSVCoder path that v1
+//  bootstrapped here; the iCloud-availability classifier still runs
+//  so Settings can show honest copy.
 //
 
 import SwiftUI
@@ -55,16 +58,12 @@ final class AppBootstrap: ObservableObject {
     func start() async {
         guard phase == .idle else { return }
         phase = .opening
-        // Register all instrument kinds before any agent / view code can
-        // dispatch an instrument event. Addendum §1.2 says this happens at
-        // @main; the bootstrap object is the @main proxy.
-        InstrumentRegistry.bootstrapAll()
         do {
             _ = try await DatabaseProvider.shared.database()
 
-            // CSV-mirror + voice bootstrap: CSV mirror + network-driven sync + voice eager init.
-            // All best-effort — voice failing (no model) or iCloud unavailable
-            // must not block the app from opening.
+            // iCloud availability classifier so Settings can show honest
+            // copy for the deprecated "csv mirror" toggle. Voice eager
+            // init scheduled below.
             await BackgroundServicesBootstrap.run()
 
             phase = .ready
@@ -93,22 +92,14 @@ final class AppBootstrap: ObservableObject {
     }
 }
 
-/// CSV-mirror + voice bootstrap. Resolves the iCloud Drive container (falling back to
-/// app-support if unavailable), wires the CSVMirrorWatcher into the tools
-/// façade, kicks off the NWPathMonitor that drains the sync queue, and
-/// schedules the WhisperKit eager-init off the main actor so the first
-/// hold-to-talk tap feels instant.
+/// Pruned bootstrap. The v1 build wired CSVMirrorWatcher +
+/// InstrumentCSVCoderRegistry here; both are gone with the workbook
+/// rebrand. We still classify iCloud availability so the Settings UI
+/// can show honest copy for the legacy "csv mirror" toggle, and we
+/// eager-init voice so the first hold-to-talk tap is responsive.
 enum BackgroundServicesBootstrap {
     static func run() async {
-        // 0. Wire each registered InstrumentKind into the CSV mirror via the
-        //    InstrumentCSVCoder adapter. InstrumentRegistry.bootstrapAll()
-        //    runs above us in AppBootstrap.start (line 55), so by this point
-        //    all 7 kinds are registered with the typed registry and we just
-        //    need to plug their renderCSV/parseCSVOverride into our CSV
-        //    coder registry.
-        await registerKindCoders()
-
-        // 1. Load settings to honor csv_mirror_enabled / icloud_drive_folder.
+        // Load settings to classify iCloud availability.
         let settings: Settings
         do {
             settings = try await SettingsStore.shared.load()
@@ -116,15 +107,6 @@ enum BackgroundServicesBootstrap {
             return // bootstrap is best-effort
         }
 
-        // 2. Pick a CSV mirror root. Prefer the iCloud ubiquity container; if
-        //    iCloud Drive isn't enabled, fall back to Application Support so
-        //    the user still gets a working in-app surface.
-        //
-        //    Whichever way the branch lands, publish the resolved availability
-        //    so Settings (CaptureSection footnote + fallback banner) can show
-        //    honest copy — v1 silently degraded to the sandbox and users
-        //    looking for a Steward folder under iCloud Drive on Mac/iPad
-        //    found nothing (nemesis caveat C).
         let containerID = "iCloud.com.rajatscode.outkeep"
         let availability = CSVMirrorAvailabilityClassifier.classify(
             mirrorEnabled: settings.csvMirrorEnabled,
@@ -137,34 +119,13 @@ enum BackgroundServicesBootstrap {
             CSVMirrorAvailabilityRegistry.publish(availability)
         }
 
-        if settings.csvMirrorEnabled {
-            let root: CSVMirrorRoot
-            switch availability {
-            case .iCloud:
-                root = .ubiquityContainer(
-                    identifier: containerID,
-                    subfolder: settings.icloudDriveFolder
-                )
-            case .localSandbox, .disabled:
-                root = .applicationSupport(subfolder: settings.icloudDriveFolder)
-            }
-            if let paths = try? CSVMirrorPaths.resolve(root) {
-                let watcher = CSVMirrorWatcher(paths: paths)
-                try? await watcher.startWatching()
-                await CSVMirrorTools.shared.configure(watcher: watcher)
-            }
-        }
-
-        // 3. Network observer drains the sync queue when path becomes satisfied.
-        await NetworkObserverBootstrap.wireCSVDrain()
-
-        // 4. Voice eager init. Detached so the model load (potentially
-        //    multi-hundred MB) doesn't slow first paint. The service no-ops
-        //    if voice is disabled in settings. Once init returns (success or
-        //    fail), install the adapter into the registry so ChatView's
-        //    mic button reflects the real service state, and post the
-        //    readiness-changed notification so any already-mounted ChatView
-        //    re-reads `availability`.
+        // Voice eager init. Detached so the model load (potentially
+        // multi-hundred MB) doesn't slow first paint. The service no-ops
+        // if voice is disabled in settings. Once init returns (success or
+        // fail), install the adapter into the registry so ChatView's
+        // mic button reflects the real service state, and post the
+        // readiness-changed notification so any already-mounted ChatView
+        // re-reads `availability`.
         Task.detached(priority: .utility) {
             await VoiceCaptureService.shared.initializeIfNeeded()
             await MainActor.run {
@@ -175,28 +136,5 @@ enum BackgroundServicesBootstrap {
                 )
             }
         }
-    }
-
-    /// Register one `InstrumentCSVCoder` per instrument kind. Adding a kind is
-    /// one line here + one line in `InstrumentRegistry.bootstrapAll()`.
-    /// Both lists are kept in sync — if a new InstrumentKind is added, this method
-    /// gets one more line and that's it. No string-keyed dispatch anywhere
-    /// (hard reject #9 still holds; the registry is the single dispatch site).
-    static func registerKindCoders() async {
-        let registry = InstrumentCSVCoderRegistry.shared
-        await registry.register(kindID: RunningAccumulator.id,
-                                coder: InstrumentCSVCoder(kind: RunningAccumulator.self))
-        await registry.register(kindID: BoundedBudget.id,
-                                coder: InstrumentCSVCoder(kind: BoundedBudget.self))
-        await registry.register(kindID: RollingAverage.id,
-                                coder: InstrumentCSVCoder(kind: RollingAverage.self))
-        await registry.register(kindID: CountdownCommitment.id,
-                                coder: InstrumentCSVCoder(kind: CountdownCommitment.self))
-        await registry.register(kindID: WeeklyEvidenceLog.id,
-                                coder: InstrumentCSVCoder(kind: WeeklyEvidenceLog.self))
-        await registry.register(kindID: Checklist.id,
-                                coder: InstrumentCSVCoder(kind: Checklist.self))
-        await registry.register(kindID: BoundedWindow.id,
-                                coder: InstrumentCSVCoder(kind: BoundedWindow.self))
     }
 }

@@ -170,12 +170,6 @@ actor UndoExecutor {
         //     the round-trip is reflected in the events stream the same way
         //     CSV reconciliation surfaces external edits.
 
-        case .revertInstrumentEvent(let instrumentIDRaw, let eventIDToReverse):
-            try await revertInstrumentEvent(
-                instrumentID: InstrumentID(rawValue: instrumentIDRaw),
-                excludingEventID: eventIDToReverse
-            )
-
         case .archiveDomain(let domain, _):
             // Undo of `domain.archive` — clear archived_at.
             try await updateDomainArchivedAt(domain: domain, archivedAt: nil)
@@ -205,30 +199,6 @@ actor UndoExecutor {
         //
         // Same pattern as the 5 above: single `db.write { }`, assert affected
         // rows so no silent no-op, emit a `manual_correction` audit row.
-
-        case .archiveInstrument(let instrumentID):
-            // Undo of `instrument.create` — flip archived_at so the row is
-            // hidden from the agent surface. Row is preserved (no DELETE)
-            // because event_log rows reference instrument_id.
-            try await updateInstrumentArchivedAt(
-                instrumentID: instrumentID,
-                archivedAt: Date()
-            )
-
-        case .unarchiveInstrument(let instrumentID):
-            // Undo of `instrument.archive` — clear archived_at.
-            try await updateInstrumentArchivedAt(
-                instrumentID: instrumentID,
-                archivedAt: nil
-            )
-
-        case .restoreInstrumentDefinition(let instrumentID, let priorDefinitionJSON):
-            // Undo of `instrument.update_definition` — write the captured
-            // prior definition back over the current one.
-            try await restoreInstrumentDefinition(
-                instrumentID: instrumentID,
-                priorDefinitionJSON: priorDefinitionJSON
-            )
 
         case .deleteCommitment(let commitmentID):
             // Undo of `commitment.create` — DELETE the row. Commitments are
@@ -276,148 +246,6 @@ actor UndoExecutor {
     ///
     /// Throws `eventPayloadMissing` if the named event doesn't belong to
     /// this instrument or doesn't exist — silent no-ops would hide bugs.
-    private func revertInstrumentEvent(
-        instrumentID: InstrumentID,
-        excludingEventID: EventID
-    ) async throws {
-        let queue = try await provider.database()
-        try await queue.write { db in
-            // Load instrument row (kind + definition).
-            guard let row = try Row.fetchOne(
-                db,
-                sql: """
-                    SELECT kind, definition_json, state_version, created_at, domain
-                    FROM instruments WHERE instrument_id = ?
-                """,
-                arguments: [instrumentID]
-            ) else {
-                throw UndoExecutorError.backendFailure(
-                    "instrument \(instrumentID.rawValue) not found"
-                )
-            }
-            let kind: String = row["kind"]
-            let definitionJSON: String = row["definition_json"]
-            let createdAtMs: Int64 = row["created_at"]
-            let domain: String = row["domain"]
-            let createdAt = Date(timeIntervalSince1970: Double(createdAtMs) / 1000)
-
-            // Pull every event in chronological order that targets this
-            // instrument and has a `payload_json` (the apply-event tool always
-            // populates payload_json with the kind-typed payload).
-            let eventRows = try Row.fetchAll(
-                db,
-                sql: """
-                    SELECT event_id, kind, actor, created_at, payload_json, text
-                    FROM events
-                    WHERE instrument_id = ?
-                      AND payload_json IS NOT NULL
-                    ORDER BY created_at ASC, event_id ASC
-                """,
-                arguments: [instrumentID]
-            )
-
-            // Verify the named event is in the set we'll be excluding.
-            let excludedRaw = excludingEventID.rawValue
-            let hasExcluded = eventRows.contains { ($0["event_id"] as String) == excludedRaw }
-            if !hasExcluded {
-                throw UndoExecutorError.backendFailure(
-                    "event \(excludedRaw) not found among instrument \(instrumentID.rawValue) events"
-                )
-            }
-
-            // Rebuild state from initial, replaying every event except the
-            // excluded one. Done as a series of individual UPDATEs through
-            // the registry — this is correct because dispatchApply persists
-            // state_json each call, so the next iteration reads the updated
-            // value. We first reset state_json to the initial state.
-            let initialStateJSON = try InstrumentRegistry.initialStateJSON(
-                forKind: kind,
-                definitionJSON: definitionJSON,
-                now: createdAt
-            )
-            let stateVersion = InstrumentRegistry.currentStateVersion(forKind: kind) ?? 1
-            try db.execute(
-                sql: """
-                    UPDATE instruments
-                    SET state_json = ?, state_version = ?, last_updated_at = ?
-                    WHERE instrument_id = ?
-                """,
-                arguments: [
-                    initialStateJSON,
-                    stateVersion,
-                    createdAtMs,
-                    instrumentID
-                ]
-            )
-
-            // The instrument-apply-event tool we want to revert was filed
-            // through EventLog.append with kind set to a per-instrument
-            // event-kind (e.g. "spend", "log"). Other event rows on the
-            // same instrument may be lifecycle events (instrument_create,
-            // instrument_archive, etc.) whose payload_json is the definition
-            // JSON, NOT a kind-typed payload. Replay only rows whose payload
-            // parses cleanly as the kind's event envelope; skip the lifecycle
-            // rows. The same heuristic is what InstrumentApplyEventTool used
-            // to write them — they're stored as an envelope with a `payload`
-            // field. Lifecycle rows have payload_json = definition or null.
-            let replayKindsToSkip: Set<String> = [
-                "instrument_create",
-                "instrument_archive",
-                "instrument_update_definition"
-            ]
-            for evt in eventRows {
-                let eid: String = evt["event_id"]
-                if eid == excludedRaw { continue }
-                let evtKind: String = evt["kind"]
-                if replayKindsToSkip.contains(evtKind) { continue }
-                guard let payloadJSON: String = evt["payload_json"] else { continue }
-                let evtCreatedMs: Int64 = evt["created_at"]
-                let evtCreatedAt = Date(timeIntervalSince1970: Double(evtCreatedMs) / 1000)
-                let actor: String = evt["actor"]
-                let notes: String? = evt["text"]
-                let envelopeJSON = try InstrumentTools.makeEventEnvelopeJSON(
-                    eventID: EventID(rawValue: eid),
-                    instrumentID: instrumentID,
-                    kind: evtKind,
-                    actor: actor,
-                    createdAt: evtCreatedAt,
-                    payloadJSON: payloadJSON,
-                    notes: notes
-                )
-                // dispatchApply tolerates lifecycle-shaped payloads by
-                // throwing `eventDecodeFailed`; we treat that as a skip so a
-                // legacy non-payload-event doesn't crash the replay.
-                do {
-                    _ = try InstrumentRegistry.dispatchApply(
-                        instrumentID: instrumentID,
-                        eventJSON: envelopeJSON,
-                        in: db,
-                        now: evtCreatedAt
-                    )
-                } catch InstrumentRegistryError.eventDecodeFailed {
-                    continue
-                }
-            }
-
-            // Emit the audit-trail correction event.
-            try EventLog.append(
-                actor: .coordinator,
-                kind: "manual_correction",
-                text: "reverted instrument event \(excludedRaw)",
-                domain: domain,
-                instrumentID: instrumentID,
-                payloadJSON: "{\"kind\":\"undo\",\"reverted_event_id\":\"\(excludedRaw)\"}",
-                source: "undo",
-                reasoning: "reverted action \(excludedRaw)",
-                at: Date(),
-                in: db
-            )
-        }
-    }
-
-    /// Toggle a domain's archived_at column. `archivedAt == nil` clears
-    /// (unarchive); a Date sets (archive). Throws on row-not-found so we
-    /// never silently succeed when the domain is gone.
     private func updateDomainArchivedAt(domain: String, archivedAt: Date?) async throws {
         let queue = try await provider.database()
         try await queue.write { db in
@@ -500,81 +328,9 @@ actor UndoExecutor {
     /// (unarchive); passing a Date sets (archive). Also bumps
     /// `last_updated_at` so the agent's instrument.list view reflects the
     /// change. Throws on row-not-found.
-    private func updateInstrumentArchivedAt(
-        instrumentID: InstrumentID,
-        archivedAt: Date?
-    ) async throws {
-        let queue = try await provider.database()
-        try await queue.write { db in
-            let nowDate = Date()
-            let nowMs = Int64(nowDate.timeIntervalSince1970 * 1000)
-            let archivedMs: Int64? = archivedAt.map { Int64($0.timeIntervalSince1970 * 1000) }
-            try db.execute(
-                sql: """
-                    UPDATE instruments
-                    SET archived_at = ?, last_updated_at = ?
-                    WHERE instrument_id = ?
-                """,
-                arguments: [archivedMs, nowMs, instrumentID]
-            )
-            let affected = db.changesCount
-            if affected == 0 {
-                throw UndoExecutorError.backendFailure(
-                    "instrument \(instrumentID.rawValue) not found — cannot toggle archived_at"
-                )
-            }
-            let verb = archivedAt == nil ? "unarchived" : "archived"
-            try EventLog.append(
-                actor: .coordinator,
-                kind: "manual_correction",
-                text: "instrument \(instrumentID.rawValue) \(verb) by undo",
-                instrumentID: instrumentID,
-                payloadJSON: "{\"kind\":\"undo\",\"instrument_id\":\"\(instrumentID.rawValue)\",\"archived\":\(archivedAt == nil ? "false" : "true")}",
-                source: "undo",
-                reasoning: "reverted action on instrument \(instrumentID.rawValue)",
-                at: nowDate,
-                in: db
-            )
-        }
-    }
 
     /// Restore the captured pre-update definition JSON for an instrument.
     /// Throws on row-not-found.
-    private func restoreInstrumentDefinition(
-        instrumentID: InstrumentID,
-        priorDefinitionJSON: String
-    ) async throws {
-        let queue = try await provider.database()
-        try await queue.write { db in
-            let nowDate = Date()
-            let nowMs = Int64(nowDate.timeIntervalSince1970 * 1000)
-            try db.execute(
-                sql: """
-                    UPDATE instruments
-                    SET definition_json = ?, last_updated_at = ?
-                    WHERE instrument_id = ?
-                """,
-                arguments: [priorDefinitionJSON, nowMs, instrumentID]
-            )
-            let affected = db.changesCount
-            if affected == 0 {
-                throw UndoExecutorError.backendFailure(
-                    "instrument \(instrumentID.rawValue) not found — cannot restore definition"
-                )
-            }
-            try EventLog.append(
-                actor: .coordinator,
-                kind: "manual_correction",
-                text: "instrument \(instrumentID.rawValue) definition restored by undo",
-                instrumentID: instrumentID,
-                payloadJSON: priorDefinitionJSON,
-                source: "undo",
-                reasoning: "reverted definition update on instrument \(instrumentID.rawValue)",
-                at: nowDate,
-                in: db
-            )
-        }
-    }
 
     /// DELETE a commitment row. Commitments table has no inbound FKs we care
     /// about; ek_reminder_id is the EventKit gateway mirror, undone via its own handlers.

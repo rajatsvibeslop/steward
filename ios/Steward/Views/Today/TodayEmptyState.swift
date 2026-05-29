@@ -2,8 +2,9 @@
 //  TodayEmptyState.swift
 //  Steward
 //
-//  Per Designer §2.6. Forward-looking, calm; "Open Chat" button switches
-//  tabs but does NOT auto-send a message. Copy is verbatim per the spec.
+//  Shown on Today when the workbook is brand-new — no sheets at all.
+//  Once the agent creates a sheet (via sheet.create), this gives way
+//  to the rows list.
 //
 
 import SwiftUI
@@ -21,7 +22,7 @@ struct TodayEmptyState: View {
                 .font(.title3)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
-            Text("Head over to Chat. Tell Outkeep something to catch, or say \"walk me through it.\" That's where the first team gets built.")
+            Text("Tap the sparkle and tell Outkeep something to track. The first sheet shows up here as soon as it's built.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

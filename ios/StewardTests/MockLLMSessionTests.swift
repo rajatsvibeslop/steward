@@ -72,70 +72,6 @@ final class MockLLMSessionTests: XCTestCase {
         XCTAssertEqual(args.actor, "coordinator")
     }
 
-    func test_turn4_instrumentConfirm_invokesInstrumentCreate() throws {
-        let sp = "conversation_state: awaiting_instrument_confirm"
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "yes please")
-        XCTAssertEqual(plan.toolCalls.count, 1)
-        let call = try XCTUnwrap(plan.toolCalls.first)
-        XCTAssertEqual(call.toolID, ToolID.instrumentCreate.rawValue)
-        let args = try ToolJSON.decode(InstrumentCreateArgs.self, from: call.argsJSON)
-        XCTAssertEqual(args.kind, "rolling_average")
-        XCTAssertEqual(args.domain, "health")
-        // definition_json must be a JSON-encoded string the kind's
-        // Definition decoder can parse — not a nested object.
-        let definitionData = try XCTUnwrap(args.definitionJSON.data(using: .utf8))
-        let definitionObj = try JSONSerialization.jsonObject(with: definitionData) as? [String: Any]
-        XCTAssertEqual(definitionObj?["unit"] as? String, "hours")
-        XCTAssertEqual(definitionObj?["window_days"] as? Int, 7)
-        XCTAssertFalse(args.reasoning.isEmpty)
-        XCTAssertEqual(args.actor, "coordinator")
-    }
-
-    func test_turn5_eventLog_invokesApplyEvent_andDecodesAgainstSchema() throws {
-        let sp = "conversation_state: free_chat"
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "slept 6 hours")
-        XCTAssertEqual(plan.toolCalls.count, 1)
-        let call = try XCTUnwrap(plan.toolCalls.first)
-        XCTAssertEqual(call.toolID, ToolID.instrumentApplyEvent.rawValue)
-        let args = try ToolJSON.decode(InstrumentApplyEventArgs.self, from: call.argsJSON)
-        XCTAssertEqual(args.eventKind, "log_entry")
-        // payload_json must be a String containing a JSON object (not a
-        // nested object on the args struct).
-        let payloadData = try XCTUnwrap(args.payloadJSON.data(using: .utf8))
-        let payloadObj = try JSONSerialization.jsonObject(with: payloadData) as? [String: Any]
-        XCTAssertEqual(payloadObj?["raw"] as? String, "slept 6 hours")
-        XCTAssertFalse(args.reasoning.isEmpty)
-        XCTAssertEqual(args.actor, "coordinator")
-    }
-
-    func test_turn5_apply_threadsLastCreatedInstrumentID() throws {
-        let sp = "conversation_state: free_chat"
-        let state = MockSessionState(lastCreatedInstrumentID: "inst_real_abc123")
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "slept 7 hours", state: state)
-        let call = try XCTUnwrap(plan.toolCalls.first)
-        let args = try ToolJSON.decode(InstrumentApplyEventArgs.self, from: call.argsJSON)
-        XCTAssertEqual(args.instrumentID.rawValue, "inst_real_abc123")
-    }
-
-    func test_turn6_statusRead_invokesInstrumentRead_andDecodes() throws {
-        let sp = "conversation_state: free_chat"
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "how am i doing on sleep this week?")
-        XCTAssertEqual(plan.toolCalls.count, 1)
-        let call = try XCTUnwrap(plan.toolCalls.first)
-        XCTAssertEqual(call.toolID, ToolID.instrumentRead.rawValue)
-        let args = try ToolJSON.decode(InstrumentReadArgs.self, from: call.argsJSON)
-        XCTAssertFalse(args.instrumentID.rawValue.isEmpty)
-    }
-
-    func test_turn6_read_threadsLastCreatedInstrumentID() throws {
-        let sp = "conversation_state: free_chat"
-        let state = MockSessionState(lastCreatedInstrumentID: "inst_real_zzz999")
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "status please", state: state)
-        let call = try XCTUnwrap(plan.toolCalls.first)
-        let args = try ToolJSON.decode(InstrumentReadArgs.self, from: call.argsJSON)
-        XCTAssertEqual(args.instrumentID.rawValue, "inst_real_zzz999")
-    }
-
     func test_branchA_capture_decodesAgainstEventCapture() throws {
         let sp = """
             conversation_state: free_chat
@@ -253,18 +189,17 @@ final class MockLLMSessionTests: XCTestCase {
         let factory = MockLLMSessionFactory(reason: .sdkNotCompiledIn,
                                             clock: { Date(timeIntervalSince1970: 1_715_000_000) })
         let captureTool = NoOpCaptureTool()
-        let applyTool = NoOpApplyEventTool()
 
         let session1 = try await factory.makeSession(
             systemPrompt: "conversation_state: free_chat",
-            tools: [captureTool, applyTool],
+            tools: [captureTool],
             temperature: 0.7
         )
         let r1 = try await session1.respond(to: "slept 6 hours")
 
         let session2 = try await factory.makeSession(
             systemPrompt: "conversation_state: free_chat",
-            tools: [captureTool, applyTool],
+            tools: [captureTool],
             temperature: 0.7
         )
         let r2 = try await session2.respond(to: "slept 6 hours")
@@ -287,138 +222,10 @@ final class MockLLMSessionTests: XCTestCase {
         let response = try await session.respond(to: "hi")
         XCTAssertEqual(response.backendKind, .mock(reason: .deviceNotEligible))
     }
-
-    // MARK: - System prompt parsing
-
-    func test_parsesAgentDomainFromSystemPrompt() {
-        // Drive the public plan() entry point with an agent_domain line —
-        // the parser is internal to MockResponsePlan but the behavior is
-        // observable through dispatch: domain-agent plans always say
-        // "[MOCK] <domain> — ...".
-        let sp = """
-            now: 2026-05-17T04:00:00Z
-            agent_domain: money
-            conversation_state: free_chat
-            """
-        let plan = MockResponsePlan.plan(systemPrompt: sp, userMessage: "status")
-        XCTAssertTrue(plan.text.contains("money"),
-                      "Domain-agent dispatch should reflect agent_domain from system prompt")
-    }
-
-    // MARK: - Empty-state protocol round-trip
-    //
-    // Walks turns 1, 3, 4, 5, 6 against real catalog tools backed by an
-    // in-memory DB. Asserts that every emitted argsJSON decodes cleanly
-    // and that turn 4's instrument_id flows into turns 5 and 6 via the
-    // shared MockSessionStateStore.
-
-    func test_emptyStateProtocol_roundTripsWithoutDecodeErrors() async throws {
-        let provider = try await makeProvider()
-        let fixedNow = ISO8601DateFormatter().date(from: "2026-05-17T10:00:00Z")!
-        let factory = MockLLMSessionFactory(
-            reason: .sdkNotCompiledIn,
-            clock: { fixedNow }
-        )
-
-        let tools: [any LLMTool] = [
-            DomainCreateTool(provider: provider, now: { fixedNow }),
-            InstrumentCreateTool(provider: provider, now: { fixedNow }),
-            InstrumentApplyEventTool(provider: provider, now: { fixedNow }),
-            InstrumentReadTool(provider: provider),
-            EventCaptureTool(provider: provider, now: { fixedNow }),
-        ]
-
-        // Turn 1 — greeting, no tools.
-        let s1 = try await factory.makeSession(
-            systemPrompt: "conversation_state: awaiting_first_message\nempty_state_branch: branch_c",
-            tools: tools,
-            temperature: 0.7
-        )
-        let r1 = try await s1.respond(to: "hi")
-        XCTAssertTrue(r1.toolInvocations.isEmpty)
-        XCTAssertTrue(r1.text.contains("Outkeep"))
-
-        // Turn 3 — domain.create.
-        let s3 = try await factory.makeSession(
-            systemPrompt: "conversation_state: awaiting_domain_confirm",
-            tools: tools,
-            temperature: 0.7
-        )
-        let r3 = try await s3.respond(to: "yes")
-        XCTAssertEqual(r3.toolInvocations.count, 1)
-        XCTAssertEqual(r3.toolInvocations.first?.toolID, ToolID.domainCreate.rawValue)
-
-        // Turn 4 — instrument.create (must register the kind first).
-        InstrumentRegistry._resetForTesting()
-        InstrumentRegistry.bootstrapAll()
-        let s4 = try await factory.makeSession(
-            systemPrompt: "conversation_state: awaiting_instrument_confirm",
-            tools: tools,
-            temperature: 0.7
-        )
-        let r4 = try await s4.respond(to: "yes")
-        XCTAssertEqual(r4.toolInvocations.count, 1)
-        XCTAssertEqual(r4.toolInvocations.first?.toolID, ToolID.instrumentCreate.rawValue)
-        let createResult = try ToolJSON.decode(
-            InstrumentCreateResult.self,
-            from: r4.toolInvocations.first!.resultJSON
-        )
-        XCTAssertFalse(createResult.instrumentID.rawValue.isEmpty)
-
-        // Turn 5 — event.capture via branch_a (freeform capture; doesn't
-        // require knowing the instrument's per-kind EventPayload schema).
-        let s5 = try await factory.makeSession(
-            systemPrompt: """
-                conversation_state: captured_awaiting_track_offer
-                empty_state_branch: branch_a
-                """,
-            tools: tools,
-            temperature: 0.7
-        )
-        let r5 = try await s5.respond(to: "drank 16 oz of water before bed")
-        XCTAssertEqual(r5.toolInvocations.count, 1)
-        XCTAssertEqual(r5.toolInvocations.first?.toolID, ToolID.eventCapture.rawValue)
-        let captureArgs = try ToolJSON.decode(
-            EventCaptureArgs.self,
-            from: r5.toolInvocations.first!.argsJSON
-        )
-        XCTAssertEqual(captureArgs.text, "drank 16 oz of water before bed")
-        XCTAssertEqual(captureArgs.actor, "coordinator")
-
-        // Turn 6 — instrument.read for the same instrument_id.
-        let s6 = try await factory.makeSession(
-            systemPrompt: "conversation_state: free_chat",
-            tools: tools,
-            temperature: 0.7
-        )
-        let r6 = try await s6.respond(to: "how am i doing on sleep")
-        XCTAssertEqual(r6.toolInvocations.count, 1)
-        XCTAssertEqual(r6.toolInvocations.first?.toolID, ToolID.instrumentRead.rawValue)
-        let readArgs = try ToolJSON.decode(
-            InstrumentReadArgs.self,
-            from: r6.toolInvocations.first!.argsJSON
-        )
-        XCTAssertEqual(readArgs.instrumentID, createResult.instrumentID,
-                       "turn 6 should read the same instrument turn 4 created")
-    }
-
-    // MARK: - Test helpers
-
-    private func makeProvider() async throws -> DatabaseProvider {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mockllm-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("steward.sqlite")
-        let provider = DatabaseProvider(location: .file(url))
-        _ = try await provider.database()
-        InstrumentRegistry._resetForTesting()
-        InstrumentRegistry.bootstrapAll()
-        return provider
-    }
 }
 
-// Minimal stub tools the tests use to verify dispatch happens. Both are
-// pure functions of input so the determinism asserts hold.
+// Minimal stub tools the tests use to verify dispatch happens. Pure
+// functions of input so the determinism asserts hold.
 private struct NoOpCaptureTool: LLMTool {
     let id = ToolID.eventCapture.rawValue
     let description = "test"
@@ -428,11 +235,3 @@ private struct NoOpCaptureTool: LLMTool {
     }
 }
 
-private struct NoOpApplyEventTool: LLMTool {
-    let id = ToolID.instrumentApplyEvent.rawValue
-    let description = "test"
-    let jsonSchemaForArgs = "{}"
-    func invoke(argsJSON: String) async throws -> String {
-        return "{\"ok\":true,\"received\":\(argsJSON.utf8.count)}"
-    }
-}

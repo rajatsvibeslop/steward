@@ -98,16 +98,13 @@ actor NetworkObserver {
     }
 }
 
-/// App bootstrap helper: wires the observer to the CSV mirror tools so a
-/// path-becomes-satisfied transition triggers `syncNow()`. Call from
-/// `StewardApp.start()` once.
+/// App bootstrap helper. v1 wired this to drain a CSV mirror sync queue
+/// on path-satisfied; the CSVMirrorTools surface was removed with the
+/// workbook rebrand. Kept as a no-op bootstrap so call sites that
+/// invoke `wireCSVDrain()` still compile while we decide whether to
+/// repurpose the observer for a future sync target.
 enum NetworkObserverBootstrap {
     static func wireCSVDrain() async {
         await NetworkObserver.shared.start()
-        _ = await NetworkObserver.shared.subscribe { reach in
-            if case .satisfied = reach {
-                _ = try? await CSVMirrorTools.shared.syncNow()
-            }
-        }
     }
 }

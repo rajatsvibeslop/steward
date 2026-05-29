@@ -404,11 +404,6 @@ enum InverseAction: Codable, Sendable, Equatable {
     /// would re-issue it from the still-active rule row (deslop regression B).
     case cancelRecurringRule(ruleID: String)
 
-    /// Replay all events for the instrument EXCEPT this one and recompute
-    /// state from `initialState`. Cheap because instrument event cardinality
-    /// is daily (addendum §1.6).
-    case revertInstrumentEvent(instrumentID: String, eventIDToReverse: EventID)
-
     /// Undo a `domain.archive` — clear `archived_at`.
     case archiveDomain(domain: String, archivedAt: Date)
 
@@ -420,19 +415,6 @@ enum InverseAction: Codable, Sendable, Equatable {
 
     /// Undo a `memory.save` — re-soft-delete the memory.
     case unforgetMemory(memoryID: MemoryID)
-
-    /// Undo an `instrument.create` — hide the freshly-created row by setting
-    /// `archived_at`. We don't DELETE because event rows may already
-    /// reference the instrument_id; the same archived-row hides it from the
-    /// agent surface (instrument.list filters `archived_at IS NULL`).
-    case archiveInstrument(instrumentID: InstrumentID)
-
-    /// Undo an `instrument.archive` — clear `archived_at`.
-    case unarchiveInstrument(instrumentID: InstrumentID)
-
-    /// Undo an `instrument.update_definition` — restore the pre-update
-    /// definition JSON captured at write time.
-    case restoreInstrumentDefinition(instrumentID: InstrumentID, priorDefinitionJSON: String)
 
     /// Undo a `commitment.create` — DELETE the row. Commitments are not
     /// append-only (unlike events / memory_items) so deletion is safe; the
@@ -525,14 +507,10 @@ enum InverseActionKind: String, Codable, Sendable, CaseIterable {
     case rescheduleNotification
     case cancelNotification
     case cancelRecurringRule
-    case revertInstrumentEvent
     case archiveDomain
     case unarchiveDomain
     case forgetMemory
     case unforgetMemory
-    case archiveInstrument
-    case unarchiveInstrument
-    case restoreInstrumentDefinition
     case deleteCommitment
     case restoreCommitmentStatus
     case weakenMemory
@@ -550,14 +528,10 @@ extension InverseAction {
         case .rescheduleNotification:      return .rescheduleNotification
         case .cancelNotification:          return .cancelNotification
         case .cancelRecurringRule:         return .cancelRecurringRule
-        case .revertInstrumentEvent:       return .revertInstrumentEvent
         case .archiveDomain:               return .archiveDomain
         case .unarchiveDomain:             return .unarchiveDomain
         case .forgetMemory:                return .forgetMemory
         case .unforgetMemory:              return .unforgetMemory
-        case .archiveInstrument:           return .archiveInstrument
-        case .unarchiveInstrument:         return .unarchiveInstrument
-        case .restoreInstrumentDefinition: return .restoreInstrumentDefinition
         case .deleteCommitment:            return .deleteCommitment
         case .restoreCommitmentStatus:     return .restoreCommitmentStatus
         case .weakenMemory:                return .weakenMemory

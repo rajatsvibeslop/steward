@@ -277,7 +277,7 @@ struct MockResponsePlan: Sendable, Equatable {
         // Turn 6 — status read ("how am I doing", etc.) — highest specificity.
         // -----------------------------------------------------------------
         if containsAny(lowered, of: ["how am i doing", "status", "where do i stand", "how's it going"]) {
-            return instrumentReadPlan(state: state)
+            return statusReadPlan()
         }
 
         // -----------------------------------------------------------------
@@ -363,24 +363,20 @@ struct MockResponsePlan: Sendable, Equatable {
         }
 
         // -----------------------------------------------------------------
-        // Turn 4 — instrument confirm
+        // Turn 4 — sheet confirm (replaces the old instrument confirm).
+        // After the user said yes to the team in turn 3, the coordinator
+        // now offers a sheet shape instead. Confirmation spawns the sheet
+        // via sheet.create — the workbook substrate replaces the
+        // instrument-kind protocol the v1 build used here.
         // -----------------------------------------------------------------
         if convoState == .awaitingInstrumentConfirm,
            containsAny(lowered, of: ["yes", "confirm", "sounds good", "do it", "yeah", "yep"]) {
+            let argsJSON = """
+            {"display_name":"Sleep","description":null,"columns":[{"name":"date","kind":"date"},{"name":"hours","kind":"number","unit":"h"},{"name":"notes","kind":"text"}],"reasoning":"[MOCK] user confirmed the proposed sleep sheet","actor":"coordinator"}
+            """
             return MockResponsePlan(
-                text: "[MOCK] Added. When would you like a quiet morning brief — 7am okay, or different?",
-                toolCalls: [.init(
-                    toolID: ToolID.instrumentCreate.rawValue,
-                    argsJSON: encodeArgs(InstrumentCreateArgs(
-                        kind: "rolling_average",
-                        name: "Sleep",
-                        domain: "health",
-                        definitionJSON: #"{"unit":"hours","window_days":7,"smoothing":"mean"}"#,
-                        reviewCadence: nil,
-                        reasoning: "[MOCK] user confirmed the proposed sleep instrument",
-                        actor: "coordinator"
-                    ))
-                )]
+                text: "[MOCK] Added a Sleep sheet (date / hours / notes). When would you like a quiet morning brief — 7am okay, or different?",
+                toolCalls: [.init(toolID: ToolID.sheetCreate.rawValue, argsJSON: argsJSON)]
             )
         }
 
@@ -407,23 +403,24 @@ struct MockResponsePlan: Sendable, Equatable {
         }
 
         // -----------------------------------------------------------------
-        // Turn 5 — event capture/apply (free-chat path; an instrument exists)
-        // Match /log|spent|slept|did|ate|drank|ran|walked|weighed/ with a
-        // quantity hint (digit anywhere in the message).
+        // Turn 5 — capture-with-quantity. Match log/spent/slept/ate/etc.
+        // with a digit anywhere in the message. The mock can't bridge to
+        // a specific sheet without state, so it just writes an event_log
+        // entry; the agent on a real device would route to the right
+        // sheet via sheet.add_row.
         // -----------------------------------------------------------------
         if containsAny(lowered, of: ["log", "spent", "slept", "ate", "drank", "ran ", "walked", "weighed"])
            && containsDigit(lowered) {
-            let instrumentID = state.lastCreatedInstrumentID ?? "inst_mock_default"
             return MockResponsePlan(
                 text: "[MOCK] Logged.",
                 toolCalls: [.init(
-                    toolID: ToolID.instrumentApplyEvent.rawValue,
-                    argsJSON: encodeArgs(InstrumentApplyEventArgs(
-                        instrumentID: InstrumentID(rawValue: instrumentID),
-                        eventKind: "log_entry",
-                        payloadJSON: encodeArgs(["raw": userMessage]),
-                        notes: nil,
-                        reasoning: "[MOCK] user reported a quantitative event; applying to the active instrument",
+                    toolID: ToolID.eventCapture.rawValue,
+                    argsJSON: encodeArgs(EventCaptureArgs(
+                        text: userMessage,
+                        domain: nil,
+                        kind: "log_entry",
+                        payloadJSON: nil,
+                        reasoning: "[MOCK] quantitative log; no sheet binding available in mock",
                         actor: "coordinator"
                     ))
                 )]
@@ -471,15 +468,15 @@ struct MockResponsePlan: Sendable, Equatable {
 
     // MARK: - Sub-plans for each tool intent
 
-    private static func instrumentReadPlan(state: MockSessionState) -> MockResponsePlan {
-        let instrumentID = state.lastCreatedInstrumentID ?? "inst_mock_default"
+    /// "How am I doing?" mock — workbook-era replacement for instrument
+    /// read. Lists active sheets so the user sees something concrete back;
+    /// real Foundation Models would synthesize across multiple sheets.
+    private static func statusReadPlan() -> MockResponsePlan {
         return MockResponsePlan(
-            text: "[MOCK] Reading your latest instrument state. (Numbers come from the tool result, not me.)",
+            text: "[MOCK] Pulling your active sheets so you can see where you stand.",
             toolCalls: [.init(
-                toolID: ToolID.instrumentRead.rawValue,
-                argsJSON: encodeArgs(InstrumentReadArgs(
-                    instrumentID: InstrumentID(rawValue: instrumentID)
-                ))
+                toolID: ToolID.sheetList.rawValue,
+                argsJSON: "{}"
             )]
         )
     }
@@ -690,15 +687,9 @@ struct MockResponsePlan: Sendable, Equatable {
         state: MockSessionState
     ) -> MockResponsePlan {
         if containsAny(userMessageLowered, of: ["status", "read", "where do i stand", "how am i doing"]) {
-            let instrumentID = state.lastCreatedInstrumentID ?? "inst_\(domain)_default"
             return MockResponsePlan(
-                text: "[MOCK] Reading \(domain) instrument state.",
-                toolCalls: [.init(
-                    toolID: ToolID.instrumentRead.rawValue,
-                    argsJSON: encodeArgs(InstrumentReadArgs(
-                        instrumentID: InstrumentID(rawValue: instrumentID)
-                    ))
-                )]
+                text: "[MOCK] Listing \(domain) sheets.",
+                toolCalls: [.init(toolID: ToolID.sheetList.rawValue, argsJSON: "{}")]
             )
         }
         if containsAny(userMessageLowered, of: ["log", "spent", "slept", "ate", "did", "weighed"])

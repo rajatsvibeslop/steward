@@ -29,13 +29,6 @@ enum ToolCatalog {
             EventCaptureTool(provider: provider, now: now),
             EventListTool(provider: provider),
             EventRecentSummaryTool(provider: provider, now: now),
-            // Instruments
-            InstrumentCreateTool(provider: provider, now: now),
-            InstrumentListTool(provider: provider),
-            InstrumentReadTool(provider: provider),
-            InstrumentApplyEventTool(provider: provider, now: now),
-            InstrumentUpdateDefinitionTool(provider: provider, now: now),
-            InstrumentArchiveTool(provider: provider, now: now),
             // Commitments
             CommitmentCreateTool(provider: provider, now: now),
             CommitmentListTool(provider: provider),

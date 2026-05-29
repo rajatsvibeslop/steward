@@ -2,18 +2,38 @@
 //  CSVTable.swift
 //  Steward
 //
-//  Operates on the canonical `CSVTable` value type defined elsewhere
-//  (`ios/Steward/Instruments/InstrumentKind.swift`). We do NOT redeclare it
-//  here — that would re-introduce the duplicate-type compile error that the
-//  an earlier work used a separate struct for.
-//
-//  This file ADDS what the canonical `CSVTable` doesn't have: an RFC-4180-ish
-//  parser/serializer (the existing in-memory `CSVTable` only constructs tables in-memory; the disk
-//  round-trip lives here) and `__row_id` partitioning. Both are extensions
-//  on `CSVTable` so callers see one type.
+//  `CSVTable` is a small in-memory row-table value type plus an
+//  RFC-4180-ish parser/serializer. The original home of the struct was
+//  `Instruments/InstrumentKind.swift` (deleted in the workbook
+//  rebrand); the type itself is still useful for the CSV-mirror watcher
+//  so the canonical declaration moves here.
 //
 
 import Foundation
+
+/// In-memory CSV: header row + N data rows. Always rectangular when
+/// constructed via `make(kindColumns:rows:)`; `init(header:rows:)` is
+/// the loose ctor for parsed data where the producer guarantees shape.
+struct CSVTable: Sendable, Equatable {
+    var header: [String]
+    var rows: [[String]]
+
+    init(header: [String], rows: [[String]]) {
+        self.header = header
+        self.rows = rows
+    }
+
+    /// Construct a table with the standard reserved-column prefix
+    /// (`__row_id`, `__steward_version`, `__last_synced_at`) plus the
+    /// per-table columns the caller specifies. Each row supplies values
+    /// for `kindColumns`; reserved columns are filled by the caller
+    /// through `rows` with the full ordered set.
+    static func make(kindColumns: [String], rows: [[String]]) -> CSVTable {
+        var header = [CSVReserved.rowID, CSVReserved.stewardVersion, CSVReserved.lastSyncedAt]
+        header.append(contentsOf: kindColumns)
+        return CSVTable(header: header, rows: rows)
+    }
+}
 
 /// Reserved column names. The canonical `CSVTable.make(kindColumns:rows:)`
 /// auto-prepends `__row_id`, `__steward_version`, `__last_synced_at` in
